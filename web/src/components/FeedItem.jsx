@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import StatusBadge from './StatusBadge';
+import PriorityBadge, { CategoryBadge } from './PriorityBadge';
 
 function formatTimestamp(iso) {
   if (!iso) return '—';
@@ -20,7 +21,11 @@ export default function FeedItem({ item }) {
           <span>·</span>
           <span>#{item.telegram_message_id}</span>
         </div>
-        <StatusBadge status={item.status} />
+        <div className="flex items-center gap-1.5">
+          <CategoryBadge category={item.category} />
+          <PriorityBadge priority={item.priority} />
+          <StatusBadge status={item.status} />
+        </div>
       </div>
       <p className="line-clamp-3 text-sm text-text">
         {item.raw_text || <span className="text-text-muted italic">No text (media-only post)</span>}

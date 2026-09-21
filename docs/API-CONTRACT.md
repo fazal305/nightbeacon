@@ -36,6 +36,8 @@ fetched-all-then-filtered client-side):
 |---|---|---|
 | `source` | uuid | `sources.id` |
 | `status` | string | `raw_items.status` |
+| `category` | string | `raw_items.category` (see `GET /api/taxonomy`) |
+| `priority` | string | `raw_items.priority` (`high`/`medium`/`low`/`informational`) |
 | `from` / `to` | ISO date | `telegram_date` range |
 | `cursor` | integer | `raw_items.id` cursor for pagination (descending) |
 | `limit` | integer, 1–100, default 50 | page size |
@@ -46,10 +48,16 @@ Response: `{ items: [...], nextCursor: number | null }`. Each item includes
 `translated_text`, `source_language`, `translation_status`.
 
 ## `GET /api/items/:id`
-Full item detail including `raw_metadata` and the full translation record
+Full item detail including `raw_metadata`, the full translation record
 (`translated_text`, `source_language`, `target_language`,
 `translation_model`, `translation_status`, `translation_error`,
-`translated_at`). `404` if not found.
+`translated_at`), `category`, `priority`, and `tags: [{ name, source,
+confidence }]`. `404` if not found.
+
+## `GET /api/taxonomy`
+`{ categories: string[], priorities: string[] }` — the deterministic
+classification taxonomy, read directly from `classificationRules.js` so the
+frontend never hardcodes a copy that could drift.
 
 ## Status values
 

@@ -10,6 +10,7 @@ import { pool } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
 import { itemsRouter } from './routes/items.js';
 import { sourcesRouter } from './routes/sources.js';
+import { taxonomyRouter } from './routes/taxonomy.js';
 import { requireAuth } from './middleware/requireAuth.js';
 
 const PgSession = connectPgSimple(session);
@@ -55,6 +56,7 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/items', requireAuth, itemsRouter);
   app.use('/api/sources', requireAuth, sourcesRouter);
+  app.use('/api/taxonomy', requireAuth, taxonomyRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });

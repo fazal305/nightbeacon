@@ -56,11 +56,26 @@ translation_attempts < 5)`, batches 5 per tick to stay under OpenRouter's
 free-tier rate limit, and a failed translation increments
 `translation_attempts` and leaves `raw_items.raw_text` completely untouched.
 
+## Classification (Phase 3)
+
+`raw_items.category` and `raw_items.priority` live directly on the row (not
+a join) since every item has exactly one of each and both need indexed feed
+filtering. `tags` / `item_tags` are separate many-to-many tables for
+descriptive tags; `item_tags.source` (`rule`/`llm`) lets the UI distinguish
+deterministic from LLM-suggested classification, per the provenance
+requirement (never present generated output as verified fact — see
+`docs/ARCHITECTURE.md`'s product assessment on why severity/confidence were
+deliberately deferred rather than added speculatively).
+
+Classification is entirely rule-based (`classificationRules.js` — keyword
+lists, no LLM call) per the project's principle: prefer deterministic rules
+where they're reliable, reserve the LLM for translation where it earns its
+keep. The classification job claims `translated` (or retriable
+`failed_tagging`) rows with `FOR UPDATE SKIP LOCKED`, same pattern as
+translation.
+
 ## Tables added in later phases (schema already designed, not yet created)
 
-- **`tags`** / **`item_tags`** — `item_tags.source` (`rule`/`llm`) so the UI
-  can distinguish deterministic from LLM-suggested classification, per the
-  provenance requirement (never present generated output as verified fact).
 - **`alerts`** — includes a `reason` column so every alert is explainable.
 - **`subsystem_status`** — append-only run log (one row per pipeline run, not
   one row overwritten per subsystem), so Activity can show history and
