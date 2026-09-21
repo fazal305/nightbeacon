@@ -109,7 +109,7 @@ export default function Activity() {
             onClick={() => setCursors((c) => c.slice(0, -1))}
             className="rounded border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text"
           >
-            ← Newer
+            <span className="inline-block rtl:-scale-x-100">←</span> Newer
           </button>
         )}
         {data?.nextCursor && (
@@ -117,7 +117,7 @@ export default function Activity() {
             onClick={() => setCursors((c) => [...c, data.nextCursor])}
             className="rounded border border-border px-3 py-1.5 text-sm text-text-muted hover:text-text"
           >
-            Older →
+            Older <span className="inline-block rtl:-scale-x-100">→</span>
           </button>
         )}
       </div>

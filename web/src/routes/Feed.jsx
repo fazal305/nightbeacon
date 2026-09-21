@@ -5,32 +5,45 @@ import { useUiStore } from '../store/uiStore';
 import FilterBar from '../components/FilterBar';
 import FeedItem from '../components/FeedItem';
 import SubsystemHealthBar from '../components/SubsystemHealthBar';
+import { useOnlineStatus } from '../lib/useOnlineStatus';
 
-const REFRESH_INTERVAL_MS = 30_000;
-
-export default function Feed({ title }) {
+export default function Feed() {
   const { t } = useTranslation();
-  const { filters } = useUiStore();
+  const { filters, refreshIntervalMs } = useUiStore();
+  const online = useOnlineStatus();
 
   const { data, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useQuery({
     queryKey: ['items', filters],
     queryFn: () => api.items(filters),
-    refetchInterval: REFRESH_INTERVAL_MS,
+    refetchInterval: online ? refreshIntervalMs : false,
   });
+
+  const isStale = dataUpdatedAt && Date.now() - dataUpdatedAt > refreshIntervalMs * 3;
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h1 className="font-mono text-base text-text">{title}</h1>
+        <h1 className="font-mono text-base text-text">{t('nav.dashboard')}</h1>
         <div className="flex items-center gap-3 text-xs text-text-muted">
+          {!online && (
+            <span className="rounded border border-priority-medium px-1.5 py-0.5 text-priority-medium">
+              {t('feed.offline')}
+            </span>
+          )}
+          {online && isStale && (
+            <span className="rounded border border-priority-medium px-1.5 py-0.5 text-priority-medium">
+              {t('feed.stale')}
+            </span>
+          )}
           {dataUpdatedAt ? (
-            <span>Last updated: {new Date(dataUpdatedAt).toLocaleTimeString()}</span>
+            <span>{t('feed.lastUpdated', { time: new Date(dataUpdatedAt).toLocaleTimeString() })}</span>
           ) : null}
           <button
             onClick={() => refetch()}
-            className="rounded border border-border px-2 py-1 hover:text-text"
+            disabled={!online}
+            className="rounded border border-border px-2 py-1 hover:text-text disabled:opacity-50"
           >
-            {isFetching ? 'Refreshing…' : 'Refresh'}
+            {isFetching ? t('feed.refreshing') : t('feed.refresh')}
           </button>
         </div>
       </div>

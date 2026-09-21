@@ -24,6 +24,12 @@ Telegram client, or multi-tenant SaaS product.
   attempt counts, and collapsible raw Telegram metadata for full provenance
 - Dedicated Source Inspector page: reliability note, language, first-tracked
   date, real polling metrics, and a list of that source's recent items
+- Real Settings page (language switcher with full Arabic RTL translation,
+  feed refresh interval, default-filter persistence) — no fake toggles
+- Genuine RTL support verified across every route: logical CSS properties
+  (`border-e`, `ps-`/`pe-`) so borders/spacing flip correctly, directional
+  arrows mirror, mobile drawer and sidebar both flip layout direction
+- Offline detection and stale-data indicator on the feed
 - Automated translation (Phase 2) — deterministic English-skip detection,
   OpenRouter for real translation, original text never overwritten on
   failure, visually distinct "Automated translation" provenance labeling
@@ -71,7 +77,7 @@ See [`SECURITY.md`](SECURITY.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
 Telegram session strings and API keys are never committed — only
 `.env.example` placeholders are tracked.
 
-## Limitations (Phase 5)
+## Limitations (Phase 6)
 
 - Alerts are not yet implemented.
 - Only one channel is monitored; source management (add/edit from the UI)

@@ -30,7 +30,7 @@ export default function SourceInspector() {
   return (
     <div className="mx-auto max-w-2xl p-6">
       <Link to="/sources" className="mb-4 inline-block text-sm text-accent underline">
-        ← Back to sources
+        <span className="inline-block rtl:-scale-x-100">←</span> Back to sources
       </Link>
 
       <div className="mb-1 flex items-center justify-between">

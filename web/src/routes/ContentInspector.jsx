@@ -132,7 +132,7 @@ export default function ContentInspector() {
   return (
     <div className="mx-auto max-w-2xl p-6">
       <Link to="/dashboard" className="mb-4 inline-block text-sm text-accent underline">
-        ← Back to feed
+        <span className="inline-block rtl:-scale-x-100">←</span> Back to feed
       </Link>
 
       <div className="mb-4 flex items-center justify-between">
