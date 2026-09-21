@@ -44,6 +44,13 @@ export const api = {
   sources: () => request('/sources'),
   source: (id) => request(`/sources/${id}`),
   taxonomy: () => request('/taxonomy'),
+  subsystems: () => request('/subsystems'),
+  activity: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    ).toString();
+    return request(`/activity${qs ? `?${qs}` : ''}`);
+  },
   health: () => request('/health'),
 };
 

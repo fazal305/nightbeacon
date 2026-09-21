@@ -15,7 +15,7 @@ impressive.
 | PostgreSQL (`pg`) | Relational persistence; constraints (not application code) enforce Telegram-message dedup. |
 | `telegram` (GramJS) | MTProto client for read-only Telegram polling — see `docs/SECURITY.md` for its maintenance-status risk note. |
 | `node-cron` | Scheduled polling/processing ticks inside the single Express process (see `docs/ARCHITECTURE.md` for why no separate worker yet). |
-| OpenRouter (`google/gemma-4-26b-a4b-it:free` default) | Translation of non-English posts; model is configurable via `OPENROUTER_MODEL` since the free-tier roster rotates. |
+| OpenRouter (`inclusionai/ling-3.0-flash-vl:free` default) | Translation of non-English posts; model is configurable via `OPENROUTER_MODEL` since the free-tier roster rotates and individual free models get temporarily rate-limited upstream — switched away from the original default (`google/gemma-4-26b-a4b-it:free`) after live testing found it saturated. |
 | `bcryptjs` | Password hashing for the single operator account. |
 | `express-session` + `connect-pg-simple` | httpOnly cookie sessions backed by Postgres, not a bare JWT. |
 | `zod` | Request validation at the API boundary. |

@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { pollAllEnabledSources } from '../ingestion/pollSource.js';
 import { runTranslationTick } from '../processing/translate.js';
 import { runClassificationTick } from '../processing/classify.js';
+import { recordRun } from '../subsystems/recordRun.js';
 
 const POLL_SCHEDULE = process.env.POLL_CRON_SCHEDULE || '*/2 * * * *'; // every 2 minutes
 const TRANSLATE_SCHEDULE = process.env.TRANSLATE_CRON_SCHEDULE || '*/1 * * * *'; // every 1 minute
@@ -10,7 +11,10 @@ const CLASSIFY_SCHEDULE = process.env.CLASSIFY_CRON_SCHEDULE || '*/1 * * * *'; /
 export function startCronJobs() {
   cron.schedule(POLL_SCHEDULE, async () => {
     try {
-      const results = await pollAllEnabledSources();
+      const results = await recordRun('ingestion', async () => {
+        const raw = await pollAllEnabledSources();
+        return raw.map((r) => ({ ...r, outcome: r.error ? 'failed' : 'success' }));
+      });
       const inserted = results.reduce((sum, r) => sum + (r.inserted || 0), 0);
       console.log(`[ingestion] poll tick: ${results.length} source(s), ${inserted} new item(s)`);
     } catch (err) {
@@ -20,7 +24,7 @@ export function startCronJobs() {
 
   cron.schedule(TRANSLATE_SCHEDULE, async () => {
     try {
-      const results = await runTranslationTick();
+      const results = await recordRun('translation', runTranslationTick);
       if (results.length > 0) {
         const translated = results.filter((r) => r.outcome === 'translated').length;
         const skipped = results.filter((r) => r.outcome === 'skipped').length;
@@ -36,7 +40,7 @@ export function startCronJobs() {
 
   cron.schedule(CLASSIFY_SCHEDULE, async () => {
     try {
-      const results = await runClassificationTick();
+      const results = await recordRun('classification', runClassificationTick);
       if (results.length > 0) {
         const ready = results.filter((r) => r.outcome === 'ready').length;
         const failed = results.filter((r) => r.outcome === 'failed').length;

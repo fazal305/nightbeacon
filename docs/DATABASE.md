@@ -74,12 +74,23 @@ keep. The classification job claims `translated` (or retriable
 `failed_tagging`) rows with `FOR UPDATE SKIP LOCKED`, same pattern as
 translation.
 
+## `subsystem_status` (Phase 4)
+
+Append-only run log — one row per pipeline tick, not one row overwritten per
+subsystem. `recordRun()` wraps every ingestion/translation/classification
+cron tick: it times the run, catches a stage-level throw (e.g. the database
+itself is unavailable) so it's recorded as `failed` instead of crashing the
+process, and derives `status` from the actual per-item outcomes —
+`success` (no errors), `degraded` (some errors, some succeeded), `failed`
+(a stage-level throw, or every item failed). `GET /api/subsystems` returns
+the latest row per known subsystem, explicitly reporting `never_run` for one
+with no history yet rather than omitting it. `GET /api/activity` is the full
+reverse-chronological history. Nothing in the UI is hardcoded — every health
+string comes from this table.
+
 ## Tables added in later phases (schema already designed, not yet created)
 
 - **`alerts`** — includes a `reason` column so every alert is explainable.
-- **`subsystem_status`** — append-only run log (one row per pipeline run, not
-  one row overwritten per subsystem), so Activity can show history and
-  "current health" is just the latest row per `subsystem_name`.
 
 ## Processing lifecycle (`raw_items.status`)
 

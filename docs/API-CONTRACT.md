@@ -59,12 +59,19 @@ confidence }]`. `404` if not found.
 classification taxonomy, read directly from `classificationRules.js` so the
 frontend never hardcodes a copy that could drift.
 
+## `GET /api/subsystems`
+Returns one entry per known subsystem (`ingestion`, `translation`,
+`classification`) — the latest `subsystem_status` row for each, or an
+explicit `{ status: "never_run", processed_count: 0, ... }` placeholder if
+it has no history yet.
+
+## `GET /api/activity`
+Paginated (`cursor`/`limit`, same pattern as `/api/items`), reverse
+chronological. Each entry is a full `subsystem_status` row: `subsystem_name`,
+`status` (`success`/`degraded`/`failed`), `started_at`, `completed_at`,
+`duration_ms`, `processed_count`, `error_count`, `last_error`.
+
 ## Status values
 
 `raw_items.status`: `new`, `translating`, `translated`, `failed_translation`,
 `tagging`, `ready`, `failed_tagging` — see `docs/DATABASE.md`.
-
-## Endpoints added in later phases
-
-`GET /api/activity`, `GET /api/subsystems` — documented here once their
-backing tables (`subsystem_status`) exist (Phase 4).
