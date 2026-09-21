@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useUiStore } from '../store/uiStore';
 import FilterBar from '../components/FilterBar';
 import FeedItem from '../components/FeedItem';
+import SubsystemHealthBar from '../components/SubsystemHealthBar';
 
 const REFRESH_INTERVAL_MS = 30_000;
 
@@ -34,6 +35,7 @@ export default function Feed({ title }) {
         </div>
       </div>
 
+      <SubsystemHealthBar />
       <FilterBar />
 
       <div className="flex-1 overflow-y-auto">
