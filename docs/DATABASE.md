@@ -1,0 +1,84 @@
+# Database Design
+
+PostgreSQL only (no MySQL support). Migrations are plain SQL files in
+`db/migrations/`, applied in filename order and tracked in a
+`schema_migrations` table by `server/src/db/migrate.js` — no ORM, since the
+schema is small and explicit SQL keeps the constraints (the actual correctness
+mechanism) visible and reviewable.
+
+## Phase 1 tables
+
+### `sources`
+One row per monitored Telegram channel. `UNIQUE(channel_username)`.
+Polling state (`last_seen_id`, `last_poll_at`, `last_success_at`, `last_error`,
+`poll_error_count`) lives here — see `docs/POLLING.md`. A source is disabled
+via `enabled = false`, never hard-deleted while it has `raw_items` (FK
+`ON DELETE RESTRICT`).
+
+### `raw_items`
+The immutable source-of-truth record. Write-once except for `status` and the
+retry-attempt counters.
+
+- `UNIQUE (source_id, telegram_message_id)` — the dedup boundary. Telegram
+  message IDs are only unique within a channel, hence the composite key.
+- `raw_metadata jsonb` stores the full raw Telegram message object from day
+  one, even before anything reads specific fields from it — OSINT tooling
+  regularly needs a field nobody anticipated (forwarded-from, view count,
+  reply-to), and it can't be backfilled once a message is gone upstream.
+- `status` is a single enum column (see Processing Lifecycle below), not
+  several boolean flags — the states are strictly sequential and mutually
+  exclusive, so separate booleans would only create combinations that are
+  logically impossible to reach.
+
+Indexes:
+- `idx_raw_items_status` — the tagging/translation claim queries and status
+  filters both hit this.
+- `idx_raw_items_collected_at` (`DESC`) — the default feed ordering.
+- `idx_raw_items_source_date` (`source_id, telegram_date DESC`) — per-source
+  recency, used by the Source Inspector and per-source feed filtering.
+
+### `users` / `session`
+Single operator credential (bcrypt hash) and a server-side session store
+table matching `connect-pg-simple`'s expected schema (httpOnly cookie, not a
+bare JWT — see `docs/SECURITY.md`).
+
+## Tables added in later phases (schema already designed, not yet created)
+
+- **`translations`** — `raw_item_id` FK (unique — a retry overwrites this row,
+  never the raw item), `translated_text`, `model`, `status`, `error_message`.
+  `raw_items.raw_text` is never overwritten by translation.
+- **`tags`** / **`item_tags`** — `item_tags.source` (`rule`/`llm`) so the UI
+  can distinguish deterministic from LLM-suggested classification, per the
+  provenance requirement (never present generated output as verified fact).
+- **`alerts`** — includes a `reason` column so every alert is explainable.
+- **`subsystem_status`** — append-only run log (one row per pipeline run, not
+  one row overwritten per subsystem), so Activity can show history and
+  "current health" is just the latest row per `subsystem_name`.
+
+## Processing lifecycle (`raw_items.status`)
+
+```
+new -> translating -> translated -> tagging -> ready
+              \-> failed_translation      \-> failed_tagging
+```
+
+Each stage claims a batch via
+`UPDATE raw_items SET status = 'translating' WHERE status = 'new' ... RETURNING`
+so two overlapping cron ticks for the same stage can't double-process a row.
+Failure states never block the item from appearing in the feed — the UI shows
+original text with a "translation failed" badge. Retries operate purely on
+`status` + the `translations`/`item_tags` tables and never re-trigger a
+Telegram fetch — ingestion and processing are fully decoupled.
+
+## Relationships
+
+```
+sources 1---* raw_items 1---1 translations
+                   |
+                   *---* item_tags *---1 tags
+                   |
+                   1---* alerts
+
+subsystem_status  (independent — operational log)
+users 1---* session
+```
