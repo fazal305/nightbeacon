@@ -7,6 +7,8 @@ export const itemsRouter = Router();
 const querySchema = z.object({
   source: z.string().uuid().optional(),
   status: z.string().optional(),
+  category: z.string().optional(),
+  priority: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   cursor: z.coerce.number().int().positive().optional(),
@@ -18,7 +20,7 @@ itemsRouter.get('/', async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid query parameters' });
   }
-  const { source, status, from, to, cursor, limit = 50 } = parsed.data;
+  const { source, status, category, priority, from, to, cursor, limit = 50 } = parsed.data;
 
   const conditions = [];
   const params = [];
@@ -30,6 +32,14 @@ itemsRouter.get('/', async (req, res) => {
   if (status) {
     params.push(status);
     conditions.push(`ri.status = $${params.length}`);
+  }
+  if (category) {
+    params.push(category);
+    conditions.push(`ri.category = $${params.length}`);
+  }
+  if (priority) {
+    params.push(priority);
+    conditions.push(`ri.priority = $${params.length}`);
   }
   if (from) {
     params.push(from);
@@ -49,7 +59,7 @@ itemsRouter.get('/', async (req, res) => {
 
   const { rows } = await pool.query(
     `SELECT ri.id, ri.telegram_message_id, ri.telegram_date, ri.collected_at,
-            ri.raw_text, ri.has_media, ri.status,
+            ri.raw_text, ri.has_media, ri.status, ri.category, ri.priority,
             s.id AS source_id, s.channel_username, s.display_name,
             t.translated_text, t.source_language, t.status AS translation_status
      FROM raw_items ri
@@ -86,5 +96,14 @@ itemsRouter.get('/:id', async (req, res) => {
     return res.status(404).json({ error: 'Item not found' });
   }
 
-  res.json(rows[0]);
+  const tags = await pool.query(
+    `SELECT tg.name, it.source, it.confidence
+     FROM item_tags it
+     JOIN tags tg ON tg.id = it.tag_id
+     WHERE it.raw_item_id = $1
+     ORDER BY tg.name`,
+    [id]
+  );
+
+  res.json({ ...rows[0], tags: tags.rows });
 });

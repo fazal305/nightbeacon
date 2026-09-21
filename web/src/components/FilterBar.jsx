@@ -6,9 +6,14 @@ const STATUS_OPTIONS = [
   '', 'new', 'translating', 'translated', 'failed_translation', 'tagging', 'ready', 'failed_tagging',
 ];
 
+function titleCase(str) {
+  return str.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function FilterBar() {
   const { filters, setFilter, clearFilters } = useUiStore();
   const { data: sources } = useQuery({ queryKey: ['sources'], queryFn: api.sources });
+  const { data: taxonomy } = useQuery({ queryKey: ['taxonomy'], queryFn: api.taxonomy });
 
   const hasActiveFilters = Object.values(filters).some(Boolean);
 
@@ -35,6 +40,32 @@ export default function FilterBar() {
         {STATUS_OPTIONS.map((s) => (
           <option key={s} value={s}>
             {s === '' ? 'All statuses' : s}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={filters.category}
+        onChange={(e) => setFilter('category', e.target.value)}
+        className="rounded border border-border bg-panel-raised px-2 py-1 text-sm text-text"
+      >
+        <option value="">All categories</option>
+        {(taxonomy?.categories || []).map((c) => (
+          <option key={c} value={c}>
+            {titleCase(c)}
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={filters.priority}
+        onChange={(e) => setFilter('priority', e.target.value)}
+        className="rounded border border-border bg-panel-raised px-2 py-1 text-sm text-text"
+      >
+        <option value="">All priorities</option>
+        {(taxonomy?.priorities || []).map((p) => (
+          <option key={p} value={p}>
+            {titleCase(p)}
           </option>
         ))}
       </select>

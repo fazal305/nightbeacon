@@ -25,9 +25,12 @@ Telegram client, or multi-tenant SaaS product.
 - Automated translation (Phase 2) — deterministic English-skip detection,
   OpenRouter for real translation, original text never overwritten on
   failure, visually distinct "Automated translation" provenance labeling
+- Deterministic classification (Phase 3) — rule-based category/priority
+  scoring and descriptive tags, with real database-level feed filtering by
+  category and priority
 
-Classification/tagging, alerts, and the operational-subsystems health panel
-land in later phases — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+Alerts and the operational-subsystems health panel land in later phases —
+see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Architecture
 
@@ -64,9 +67,9 @@ See [`SECURITY.md`](SECURITY.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
 Telegram session strings and API keys are never committed — only
 `.env.example` placeholders are tracked.
 
-## Limitations (Phase 2)
+## Limitations (Phase 3)
 
-- Tagging/classification and alerts are not yet implemented.
+- Alerts and the operational subsystems health panel are not yet implemented.
 - Only one channel is currently monitored (seeded via `npm run seed:source`).
 - Translation requires `OPENROUTER_API_KEY` to be set; without it, non-English
   items are correctly marked `failed_translation` (original text preserved)

@@ -43,6 +43,7 @@ export const api = {
   item: (id) => request(`/items/${id}`),
   sources: () => request('/sources'),
   source: (id) => request(`/sources/${id}`),
+  taxonomy: () => request('/taxonomy'),
   health: () => request('/health'),
 };
 
