@@ -1,0 +1,30 @@
+{
+  "name": "nightbeacon-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "migrate": "node src/db/migrate.js",
+    "seed:source": "node src/db/seedSource.js",
+    "seed:operator": "node src/db/seedOperator.js",
+    "telegram:login": "node src/ingestion/generateSession.js",
+    "test": "node --test src/ingestion/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^10.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "express-session": "^1.18.1",
+    "helmet": "^7.1.0",
+    "input": "^1.0.1",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.1",
+    "telegram": "^2.26.16",
+    "zod": "^3.23.8"
+  }
+}
