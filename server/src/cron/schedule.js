@@ -1,7 +1,9 @@
 import cron from 'node-cron';
 import { pollAllEnabledSources } from '../ingestion/pollSource.js';
+import { runTranslationTick } from '../processing/translate.js';
 
 const POLL_SCHEDULE = process.env.POLL_CRON_SCHEDULE || '*/2 * * * *'; // every 2 minutes
+const TRANSLATE_SCHEDULE = process.env.TRANSLATE_CRON_SCHEDULE || '*/1 * * * *'; // every 1 minute
 
 export function startCronJobs() {
   cron.schedule(POLL_SCHEDULE, async () => {
@@ -14,5 +16,22 @@ export function startCronJobs() {
     }
   });
 
+  cron.schedule(TRANSLATE_SCHEDULE, async () => {
+    try {
+      const results = await runTranslationTick();
+      if (results.length > 0) {
+        const translated = results.filter((r) => r.outcome === 'translated').length;
+        const skipped = results.filter((r) => r.outcome === 'skipped').length;
+        const failed = results.filter((r) => r.outcome === 'failed').length;
+        console.log(
+          `[translation] tick: ${results.length} item(s) — ${translated} translated, ${skipped} skipped, ${failed} failed`
+        );
+      }
+    } catch (err) {
+      console.error('[translation] tick failed:', err.message);
+    }
+  });
+
   console.log(`[cron] ingestion poll scheduled: ${POLL_SCHEDULE}`);
+  console.log(`[cron] translation tick scheduled: ${TRANSLATE_SCHEDULE}`);
 }

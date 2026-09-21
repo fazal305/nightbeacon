@@ -42,11 +42,22 @@ Single operator credential (bcrypt hash) and a server-side session store
 table matching `connect-pg-simple`'s expected schema (httpOnly cookie, not a
 bare JWT — see `docs/SECURITY.md`).
 
+## `translations` (Phase 2)
+
+`raw_item_id` FK, `UNIQUE(raw_item_id)` — a retry does `ON CONFLICT (raw_item_id)
+DO UPDATE`, overwriting this row, never touching `raw_items.raw_text`.
+`status`: `pending` / `done` / `failed` / `skipped_same_language` (the last
+covers both "already English" and "no text to translate", decided
+deterministically by `detectLanguage.js` — a script-detection regex, not an
+LLM call, per the project's "prefer deterministic rules" principle). The
+translation job claims rows with `FOR UPDATE SKIP LOCKED` from
+`raw_items WHERE status = 'new' OR (status = 'failed_translation' AND
+translation_attempts < 5)`, batches 5 per tick to stay under OpenRouter's
+free-tier rate limit, and a failed translation increments
+`translation_attempts` and leaves `raw_items.raw_text` completely untouched.
+
 ## Tables added in later phases (schema already designed, not yet created)
 
-- **`translations`** — `raw_item_id` FK (unique — a retry overwrites this row,
-  never the raw item), `translated_text`, `model`, `status`, `error_message`.
-  `raw_items.raw_text` is never overwritten by translation.
 - **`tags`** / **`item_tags`** — `item_tags.source` (`rule`/`llm`) so the UI
   can distinguish deterministic from LLM-suggested classification, per the
   provenance requirement (never present generated output as verified fact).

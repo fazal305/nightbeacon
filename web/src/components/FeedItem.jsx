@@ -25,6 +25,15 @@ export default function FeedItem({ item }) {
       <p className="line-clamp-3 text-sm text-text">
         {item.raw_text || <span className="text-text-muted italic">No text (media-only post)</span>}
       </p>
+      {item.translation_status === 'done' && item.translated_text && (
+        <p className="mt-1 line-clamp-2 border-l-2 border-accent/40 pl-2 text-sm text-text-muted">
+          <span className="mr-1 font-mono text-[10px] uppercase tracking-wide text-accent">
+            Automated translation
+          </span>
+          <br />
+          {item.translated_text}
+        </p>
+      )}
       <div className="mt-1 font-mono text-xs text-text-muted">
         {formatTimestamp(item.telegram_date)}
       </div>
