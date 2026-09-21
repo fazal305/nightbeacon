@@ -1,5 +1,6 @@
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
+import { buildProxyConfig } from './proxyConfig.js';
 
 let client = null;
 
@@ -21,6 +22,7 @@ export async function getTelegramClient() {
 
   client = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
     connectionRetries: 3,
+    proxy: buildProxyConfig(),
   });
 
   await client.connect();

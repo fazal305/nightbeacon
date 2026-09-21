@@ -30,8 +30,8 @@ function TranslationSection({ data }) {
         </h2>
         <p className="text-sm text-text-muted">{data.translation_error}</p>
         <p className="mt-2 text-xs text-text-muted">
-          The original text above is unaffected — translation retries automatically without
-          re-fetching from Telegram.
+          Attempt {data.translation_attempts} of 5 — the original text above is unaffected;
+          translation retries automatically without re-fetching from Telegram.
         </p>
       </section>
     );
@@ -64,7 +64,8 @@ function ClassificationSection({ data }) {
           Classification failed
         </h2>
         <p className="text-xs text-text-muted">
-          Retries automatically — the item still appears in the feed in the meantime.
+          Attempt {data.tagging_attempts} of 5 — retries automatically; the item still appears in
+          the feed in the meantime.
         </p>
       </section>
     );
@@ -135,9 +136,9 @@ export default function ContentInspector() {
       </Link>
 
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="font-mono text-base text-text">
+        <Link to={`/sources/${data.source_id}`} className="font-mono text-base text-text hover:text-accent">
           {data.display_name} · @{data.channel_username}
-        </h1>
+        </Link>
         <StatusBadge status={data.status} />
       </div>
 
@@ -164,6 +165,17 @@ export default function ContentInspector() {
       <TranslationSection data={data} />
 
       <ClassificationSection data={data} />
+
+      {data.raw_metadata && Object.keys(data.raw_metadata).length > 0 && (
+        <details className="rounded border border-border bg-panel p-4">
+          <summary className="cursor-pointer font-mono text-xs uppercase tracking-wide text-text-muted">
+            Raw Telegram metadata
+          </summary>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-xs text-text-muted">
+            {JSON.stringify(data.raw_metadata, null, 2)}
+          </pre>
+        </details>
+      )}
     </div>
   );
 }

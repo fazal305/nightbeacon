@@ -5,6 +5,7 @@ import { pool } from '../db/pool.js';
 export const activityRouter = Router();
 
 const querySchema = z.object({
+  subsystem: z.enum(['ingestion', 'translation', 'classification']).optional(),
   cursor: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
@@ -14,10 +15,14 @@ activityRouter.get('/', async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid query parameters' });
   }
-  const { cursor, limit = 50 } = parsed.data;
+  const { subsystem, cursor, limit = 50 } = parsed.data;
 
   const conditions = [];
   const params = [];
+  if (subsystem) {
+    params.push(subsystem);
+    conditions.push(`subsystem_name = $${params.length}`);
+  }
   if (cursor) {
     params.push(cursor);
     conditions.push(`id < $${params.length}`);

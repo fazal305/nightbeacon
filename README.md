@@ -20,8 +20,10 @@ Telegram client, or multi-tenant SaaS product.
 - Crash-safe ingestion — see [`docs/POLLING.md`](docs/POLLING.md)
 - Session-authenticated single-operator dashboard
 - Real-time-refreshing feed with source/status filtering
-- Content inspector showing original source text and processing status
-- Source inspector with real polling metrics (no hardcoded numbers)
+- Content inspector: original text, translation, classification, retry
+  attempt counts, and collapsible raw Telegram metadata for full provenance
+- Dedicated Source Inspector page: reliability note, language, first-tracked
+  date, real polling metrics, and a list of that source's recent items
 - Automated translation (Phase 2) — deterministic English-skip detection,
   OpenRouter for real translation, original text never overwritten on
   failure, visually distinct "Automated translation" provenance labeling
@@ -69,9 +71,11 @@ See [`SECURITY.md`](SECURITY.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
 Telegram session strings and API keys are never committed — only
 `.env.example` placeholders are tracked.
 
-## Limitations (Phase 4)
+## Limitations (Phase 5)
 
 - Alerts are not yet implemented.
+- Only one channel is monitored; source management (add/edit from the UI)
+  is deferred — sources are seeded via `npm run seed:source`.
 - Only one channel is currently monitored (seeded via `npm run seed:source`).
 - Translation requires `OPENROUTER_API_KEY` to be set; without it, non-English
   items are correctly marked `failed_translation` (original text preserved)

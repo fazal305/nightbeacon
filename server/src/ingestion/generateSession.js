@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import input from 'input';
+import { buildProxyConfig } from './proxyConfig.js';
 
 async function main() {
   const apiId = Number(process.env.TELEGRAM_API_ID);
@@ -20,8 +21,14 @@ async function main() {
     process.exit(1);
   }
 
+  const proxy = buildProxyConfig();
+  if (proxy) {
+    console.log(`Using proxy ${proxy.ip}:${proxy.port} (${proxy.MTProxy ? 'MTProxy' : `SOCKS${proxy.socksType}`})\n`);
+  }
+
   const client = new TelegramClient(new StringSession(''), apiId, apiHash, {
     connectionRetries: 3,
+    proxy,
   });
 
   await client.start({

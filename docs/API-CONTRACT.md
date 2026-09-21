@@ -26,7 +26,8 @@ Body: `{ username, password }`. `200 { authenticated: true, username }` or
 Returns all sources with a computed `item_count`.
 
 ## `GET /api/sources/:id`
-Single source, `404` if not found.
+Single source plus `ready_count` and `recent_items` (last 10, for the Source
+Inspector). `404` if not found.
 
 ## `GET /api/items`
 Query params (all optional, all applied as SQL `WHERE` clauses — never
@@ -66,10 +67,12 @@ explicit `{ status: "never_run", processed_count: 0, ... }` placeholder if
 it has no history yet.
 
 ## `GET /api/activity`
-Paginated (`cursor`/`limit`, same pattern as `/api/items`), reverse
-chronological. Each entry is a full `subsystem_status` row: `subsystem_name`,
-`status` (`success`/`degraded`/`failed`), `started_at`, `completed_at`,
-`duration_ms`, `processed_count`, `error_count`, `last_error`.
+Paginated (`cursor`/`limit`, same pattern as `/api/items`) and optionally
+filtered by `subsystem` (`ingestion`/`translation`/`classification`) — at the
+database layer, not client-side. Reverse chronological. Each entry is a full
+`subsystem_status` row: `subsystem_name`, `status`
+(`success`/`degraded`/`failed`), `started_at`, `completed_at`, `duration_ms`,
+`processed_count`, `error_count`, `last_error`.
 
 ## Status values
 

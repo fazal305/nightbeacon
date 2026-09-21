@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
@@ -21,7 +22,11 @@ export default function Sources() {
 
       <div className="grid gap-3 sm:grid-cols-2">
         {data?.map((s) => (
-          <div key={s.id} className="rounded border border-border bg-panel p-4">
+          <Link
+            key={s.id}
+            to={`/sources/${s.id}`}
+            className="block rounded border border-border bg-panel p-4 hover:border-accent/50"
+          >
             <div className="mb-1 flex items-center justify-between">
               <span className="font-mono text-sm text-text">{s.display_name}</span>
               <span
@@ -38,17 +43,13 @@ export default function Sources() {
               <dd className="text-right text-text">{s.item_count}</dd>
               <dt>Last poll</dt>
               <dd className="text-right text-text">{formatTimestamp(s.last_poll_at)}</dd>
-              <dt>Last success</dt>
-              <dd className="text-right text-text">{formatTimestamp(s.last_success_at)}</dd>
               <dt>Poll errors</dt>
               <dd className="text-right text-text">{s.poll_error_count}</dd>
-              <dt>Last seen ID</dt>
-              <dd className="text-right text-text">{s.last_seen_id}</dd>
             </dl>
             {s.last_error && (
-              <p className="mt-2 text-xs text-priority-high">{s.last_error}</p>
+              <p className="mt-2 truncate text-xs text-priority-high">{s.last_error}</p>
             )}
-          </div>
+          </Link>
         ))}
       </div>
     </div>
