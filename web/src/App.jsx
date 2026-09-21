@@ -3,6 +3,7 @@ import Login from './routes/Login';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Feed from './routes/Feed';
 import Sources from './routes/Sources';
+import SourceInspector from './routes/SourceInspector';
 import Activity from './routes/Activity';
 import ContentInspector from './routes/ContentInspector';
 import ComingSoon from './components/ComingSoon';
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/dashboard" element={<Feed title="Dashboard" />} />
         <Route path="/live" element={<ComingSoon title="Live Monitor" />} />
         <Route path="/sources" element={<Sources />} />
+        <Route path="/sources/:id" element={<SourceInspector />} />
         <Route path="/activity" element={<Activity />} />
         <Route path="/content/:id" element={<ContentInspector />} />
         <Route path="/settings" element={<ComingSoon title="Settings" />} />

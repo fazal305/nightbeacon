@@ -23,6 +23,23 @@ npm run seed:source
 cd ../web && npm install
 ```
 
+## Telegram proxy (optional)
+
+If Telegram is blocked on your network, set a proxy in `.env` before running
+the login script or the server — both the login script and the runtime
+ingestion client read the same config (`server/src/ingestion/proxyConfig.js`):
+
+```bash
+# SOCKS5 proxy
+TELEGRAM_PROXY_IP=203.0.113.5
+TELEGRAM_PROXY_PORT=1080
+TELEGRAM_PROXY_SOCKS_TYPE=5
+# optional: TELEGRAM_PROXY_USERNAME / TELEGRAM_PROXY_PASSWORD
+```
+
+or an MTProxy (`TELEGRAM_PROXY_SECRET` instead of a SOCKS type). Leave all
+`TELEGRAM_PROXY_*` vars empty to connect directly, no proxy.
+
 ## Telegram session (one-time, interactive)
 
 ```bash
