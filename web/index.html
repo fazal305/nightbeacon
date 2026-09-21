@@ -9,7 +9,24 @@
       name="description"
       content="Single-operator OSINT dashboard for monitoring public Telegram channels: live feed, translation, and classification."
     />
-    <link rel="canonical" href="http://localhost:5173/" />
+    <!-- canonical intentionally points at localhost until Phase 8 deployment assigns a real
+         domain — updated then, never left pointing at a guessed/fake production URL. -->
+    <link rel="canonical" href="http://localhost:5901/" />
+    <meta name="robots" content="noindex, nofollow" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="http://localhost:5901/" />
+    <meta property="og:title" content="Nightbeacon — OSINT Monitoring" />
+    <meta
+      property="og:description"
+      content="Single-operator OSINT dashboard for monitoring public Telegram channels: live feed, translation, and classification."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nightbeacon — OSINT Monitoring" />
+    <meta
+      name="twitter:description"
+      content="Single-operator OSINT dashboard for monitoring public Telegram channels: live feed, translation, and classification."
+    />
   </head>
   <body>
     <div id="root"></div>

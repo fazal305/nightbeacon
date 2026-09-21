@@ -14,7 +14,7 @@ export default function ProtectedRoute() {
   }
 
   if (!data?.authenticated) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" replace state={data?.expired ? { expired: true } : undefined} />;
   }
 
   return (

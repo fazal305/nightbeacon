@@ -29,7 +29,12 @@ Telegram client, or multi-tenant SaaS product.
 - Genuine RTL support verified across every route: logical CSS properties
   (`border-e`, `ps-`/`pe-`) so borders/spacing flip correctly, directional
   arrows mirror, mobile drawer and sidebar both flip layout direction
-- Offline detection and stale-data indicator on the feed
+- Offline detection, stale-data indicator, and a distinct "slow network"
+  loading state (not just a generic spinner) on the feed
+- Session expiration handled mid-use: a 401 on any query redirects to login
+  with a clear explanation, not a silent broken feed
+- Clean SEO/social metadata (`robots`, canonical, Open Graph, Twitter Card)
+  and a private-dashboard-appropriate `noindex` directive
 - Automated translation (Phase 2) — deterministic English-skip detection,
   OpenRouter for real translation, original text never overwritten on
   failure, visually distinct "Automated translation" provenance labeling

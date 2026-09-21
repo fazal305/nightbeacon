@@ -18,6 +18,7 @@ const resources = {
       feed: {
         empty: 'No items match the current filters.',
         loading: 'Loading feed…',
+        slowNetwork: 'Still waiting for the server…',
         error: 'Could not load the feed.',
         automatedTranslation: 'Automated translation',
         lastUpdated: 'Last updated: {{time}}',
@@ -59,6 +60,7 @@ const resources = {
       feed: {
         empty: 'لا توجد عناصر مطابقة للمرشحات الحالية.',
         loading: 'جارٍ تحميل الموجز…',
+        slowNetwork: 'لا يزال في انتظار الخادم…',
         error: 'تعذر تحميل الموجز.',
         automatedTranslation: 'ترجمة آلية',
         lastUpdated: 'آخر تحديث: {{time}}',

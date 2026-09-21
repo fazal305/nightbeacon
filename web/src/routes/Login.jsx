@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 
@@ -7,7 +7,9 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const sessionExpired = location.state?.expired;
 
   const login = useMutation({
     mutationFn: () => api.login(username, password),
@@ -31,6 +33,12 @@ export default function Login() {
       >
         <h1 className="mb-1 font-mono text-lg text-text">Nightbeacon</h1>
         <p className="mb-5 text-sm text-text-muted">Operator sign-in</p>
+
+        {sessionExpired && (
+          <p className="mb-4 rounded border border-priority-medium px-3 py-2 text-sm text-priority-medium">
+            Your session expired. Please sign in again.
+          </p>
+        )}
 
         <label className="mb-3 block text-sm text-text-muted">
           Username

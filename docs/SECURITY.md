@@ -24,6 +24,29 @@ widely documented implementation. This is a tracked risk, not an oversight —
 revisit if GramJS breaks against a future Telegram API change, or migrate
 proactively if `teleproto` proves stable. See the ADR in `docs/adr/`.
 
+## Dependency audit
+
+`npm audit --production` is clean (0 vulnerabilities) on both `server/` and
+`web/` as of the last hardening pass. A moderate `uuid` vulnerability
+(transitive via `node-cron`'s old `uuid` dependency) was fixed by upgrading
+`node-cron` to 4.x — verified as a safe upgrade for this project's usage
+(`cron.schedule(pattern, fn)` only, no removed options). Re-run
+`npm audit --production` periodically; don't force-upgrade majors without a
+concrete vulnerability, since that risks destabilizing working code for no
+security benefit.
+
+## Session handling
+
+A 401 from any authenticated endpoint (not just the initial session check)
+is treated as "session expired mid-use" — `api.js` dispatches a
+`nightbeacon:session-expired` event, which `App.jsx` catches to mark the
+shared session state unauthenticated. `ProtectedRoute` then redirects to
+`/login` with a clear "Your session expired" message, rather than each
+query silently failing with a generic error. Verified by invalidating the
+session server-side while mid-session and confirming the redirect + message
+(not just testing a fresh page load, which follows a different, simpler
+"never logged in" path).
+
 ## Application security
 
 - Auth: single operator, bcrypt-hashed password, httpOnly + `Secure` (in

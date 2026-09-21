@@ -22,6 +22,14 @@ async function request(path, options = {}) {
     } catch {
       // ignore non-JSON error bodies
     }
+    // A 401 on any authenticated endpoint means the session expired mid-use
+    // (login itself never reaches this branch on bad credentials — it's a
+    // distinct 401 path handled by the caller). Signal it directly rather
+    // than relying on a query-library callback, so every consumer reacts
+    // consistently regardless of which query triggered it.
+    if (res.status === 401 && !path.startsWith('/auth/')) {
+      window.dispatchEvent(new CustomEvent('nightbeacon:session-expired'));
+    }
     throw new ApiError(message, res.status);
   }
 

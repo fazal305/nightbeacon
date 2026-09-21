@@ -6,6 +6,7 @@ import FilterBar from '../components/FilterBar';
 import FeedItem from '../components/FeedItem';
 import SubsystemHealthBar from '../components/SubsystemHealthBar';
 import { useOnlineStatus } from '../lib/useOnlineStatus';
+import { useSlowLoading } from '../lib/useSlowLoading';
 
 export default function Feed() {
   const { t } = useTranslation();
@@ -19,6 +20,7 @@ export default function Feed() {
   });
 
   const isStale = dataUpdatedAt && Date.now() - dataUpdatedAt > refreshIntervalMs * 3;
+  const isSlow = useSlowLoading(isLoading);
 
   return (
     <div className="flex h-full flex-col">
@@ -53,7 +55,9 @@ export default function Feed() {
 
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
-          <div className="p-6 text-sm text-text-muted">{t('feed.loading')}</div>
+          <div className="p-6 text-sm text-text-muted">
+            {isSlow ? t('feed.slowNetwork') : t('feed.loading')}
+          </div>
         )}
 
         {isError && (
