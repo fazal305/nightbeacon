@@ -31,7 +31,7 @@ export default function FeedItem({ item }) {
         {item.raw_text || <span className="text-text-muted italic">No text (media-only post)</span>}
       </p>
       {item.translation_status === 'done' && item.translated_text && (
-        <p className="mt-1 line-clamp-2 border-l-2 border-accent/40 pl-2 text-sm text-text-muted">
+        <p className="mt-1 line-clamp-2 border-s-2 border-accent/40 ps-2 text-sm text-text-muted">
           <span className="mr-1 font-mono text-[10px] uppercase tracking-wide text-accent">
             Automated translation
           </span>

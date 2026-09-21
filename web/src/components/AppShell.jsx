@@ -71,7 +71,7 @@ export default function AppShell({ children }) {
       {/* Mobile drawer overlay */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex sm:hidden">
-          <div className="flex w-64 flex-col border-r border-border bg-panel">
+          <div className="flex w-64 flex-col border-e border-border bg-panel">
             <SidebarContent
               t={t}
               onNavigate={() => setDrawerOpen(false)}
@@ -87,7 +87,7 @@ export default function AppShell({ children }) {
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-panel sm:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-e border-border bg-panel sm:flex">
         <SidebarContent t={t} onNavigate={undefined} onLogout={() => logout.mutate()} />
       </aside>
 
