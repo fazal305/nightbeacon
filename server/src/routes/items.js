@@ -50,9 +50,11 @@ itemsRouter.get('/', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT ri.id, ri.telegram_message_id, ri.telegram_date, ri.collected_at,
             ri.raw_text, ri.has_media, ri.status,
-            s.id AS source_id, s.channel_username, s.display_name
+            s.id AS source_id, s.channel_username, s.display_name,
+            t.translated_text, t.source_language, t.status AS translation_status
      FROM raw_items ri
      JOIN sources s ON s.id = ri.source_id
+     LEFT JOIN translations t ON t.raw_item_id = ri.id
      ${where}
      ORDER BY ri.id DESC
      LIMIT $${params.length}`,
@@ -70,9 +72,12 @@ itemsRouter.get('/:id', async (req, res) => {
   }
 
   const { rows } = await pool.query(
-    `SELECT ri.*, s.channel_username, s.display_name
+    `SELECT ri.*, s.channel_username, s.display_name,
+            t.translated_text, t.source_language, t.target_language, t.model AS translation_model,
+            t.status AS translation_status, t.error_message AS translation_error, t.updated_at AS translated_at
      FROM raw_items ri
      JOIN sources s ON s.id = ri.source_id
+     LEFT JOIN translations t ON t.raw_item_id = ri.id
      WHERE ri.id = $1`,
     [id]
   );

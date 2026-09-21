@@ -42,10 +42,14 @@ fetched-all-then-filtered client-side):
 
 Response: `{ items: [...], nextCursor: number | null }`. Each item includes
 `source_id`, `channel_username`, `display_name`, `telegram_message_id`,
-`telegram_date`, `collected_at`, `raw_text`, `has_media`, `status`.
+`telegram_date`, `collected_at`, `raw_text`, `has_media`, `status`,
+`translated_text`, `source_language`, `translation_status`.
 
 ## `GET /api/items/:id`
-Full item detail including `raw_metadata`. `404` if not found.
+Full item detail including `raw_metadata` and the full translation record
+(`translated_text`, `source_language`, `target_language`,
+`translation_model`, `translation_status`, `translation_error`,
+`translated_at`). `404` if not found.
 
 ## Status values
 
