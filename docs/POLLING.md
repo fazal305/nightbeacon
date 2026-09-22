@@ -98,6 +98,33 @@ unaffected (GramJS's entity cache survives). If Nightbeacon grows well
 beyond ~450 sources, revisit whether `ResolveUsername` calls need their own,
 separate, more conservative pacing from `getMessages` calls.
 
+## Source curation: removing redundant/relay channels
+
+With 445 sources spanning overlapping Telegram chat-folder lists, some
+channels turned out to be pure relays of another channel already
+monitored — either explicitly labeled "mirror" backups, or different
+official accounts (e.g. a group's separate city/battalion channels)
+broadcasting identical centralized statements. Rather than guessing from
+channel names, this was detected empirically from real ingested content:
+for every pair of channels sharing ≥5 identical `raw_text` posts, computed
+what fraction of *each* channel's own total content that shared set
+represents. Only pairs where **both** channels were ≥80% overlapping with
+each other specifically were treated as duplicates — a channel that shares
+one viral/boilerplate post with many others doesn't qualify, only ones that
+are almost entirely relaying the same content. For each duplicate pair, the
+earlier-tracked channel was kept and the other removed (with its raw_items,
+since the content is preserved via the surviving channel). 18 channels were
+removed this way, from 445 down to 424. The 3 explicitly "mirror"-named
+channels were included regardless of whether they cleared the statistical
+threshold, since the account owner's own naming was already unambiguous
+evidence.
+
+This is a one-time manual analysis, not an automated pipeline stage —
+`classify.js`/`translate.js` remain untouched by it. If the source list
+grows again, the same method (compare real ingested content, not names) is
+the reliable way to find genuine relays without risking removal of a
+channel that merely shares one common announcement.
+
 ## Crash recovery for processing stages (not ingestion-specific, but related)
 
 Ingestion itself is already crash-safe via the transactional insert (see
