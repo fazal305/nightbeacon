@@ -1,0 +1,27 @@
+[Unit]
+Description=Nightbeacon API (ingestion + processing + Express)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=nightbeacon
+Group=nightbeacon
+WorkingDirectory=__REPO_DIR__/server
+EnvironmentFile=__REPO_DIR__/server/.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=5
+# journald captures stdout/stderr — read with: journalctl -u nightbeacon -f
+StandardOutput=journal
+StandardError=journal
+
+# Minimal hardening: the service has no reason to write outside its own
+# working directory or touch most of the OS.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=__REPO_DIR__/server
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

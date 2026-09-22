@@ -69,6 +69,7 @@ OpenRouter
 web/       React + Vite frontend
 server/    Express API + ingestion/processing pipeline
 db/        SQL migrations and seed scripts
+deploy/    GCP provisioning + systemd/nginx deployment scripts
 docs/      Architecture, database, API contract, security, deployment docs
 ```
 
