@@ -1,18 +1,35 @@
 import { pool } from '../db/pool.js';
-import { callOpenRouter } from './openrouter.js';
+import { callLLM } from './llmClient.js';
 import { looksLikeEnglish } from './detectLanguage.js';
 
-// OpenRouter free tier caps at 20 req/min; the tick runs once per minute, so
-// 15 leaves headroom for retries without tripping the limit. Raised from 5
-// once real multi-channel volume (128 sources, thousands of backlog items)
-// made the old value too slow to ever clear a realistic backlog.
-const BATCH_SIZE = 15;
+// Groq's free tier (default provider, see llmClient.js) allows ~1000
+// requests/10min (~100/min sustained) and ~30k tokens/min — confirmed via
+// its response rate-limit headers. 50/min leaves comfortable headroom under
+// both the request and token ceilings even with the long real-world post
+// lengths seen in production (a full backlog item can run several hundred
+// tokens). Was 5, then 15 under OpenRouter's much stricter free tier before
+// its 50-req/day account-wide cap forced the provider switch — see
+// docs/POLLING.md and the ADR for that decision.
+const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 5;
 
 const LANG_CODE_RE = /^[a-z]{2,3}$/i;
 
+// A systemic failure (the whole account/model is out of quota, or the
+// provider itself is down) is not the item's fault and won't resolve by
+// retrying that specific item sooner — it resolves on its own schedule
+// (daily quota reset, provider recovery). Counting these against an item's
+// translation_attempts would exhaust its retry budget for good within
+// minutes (5 attempts × ~1min ticks) over something entirely external,
+// permanently stranding it in failed_translation long after the real
+// problem has cleared. Per-item errors (bad response format, etc.) still
+// count normally.
+function isSystemicFailure(message) {
+  return /free-models-per-day|rate limit (exceeded|reached)|too many requests|429/i.test(message);
+}
+
 async function translateText(text) {
-  const { content, model } = await callOpenRouter([
+  const { content, model } = await callLLM([
     {
       role: 'system',
       content:
@@ -99,12 +116,17 @@ async function processItem(item) {
     await client.query('ROLLBACK').catch(() => {});
     // Translation failure never touches raw_items.raw_text — only status + the
     // separate translations row. The original stays intact and visible.
+    const systemic = isSystemicFailure(err.message);
     await pool.query(
-      `UPDATE raw_items SET status = 'failed_translation', translation_attempts = translation_attempts + 1, updated_at = now() WHERE id = $1`,
+      systemic
+        ? `UPDATE raw_items SET status = 'new', updated_at = now() WHERE id = $1`
+        : `UPDATE raw_items SET status = 'failed_translation', translation_attempts = translation_attempts + 1, updated_at = now() WHERE id = $1`,
       [item.id]
     );
-    await upsertTranslation(pool, { id: item.id, status: 'failed', errorMessage: err.message });
-    return { id: item.id, outcome: 'failed', error: err.message };
+    if (!systemic) {
+      await upsertTranslation(pool, { id: item.id, status: 'failed', errorMessage: err.message });
+    }
+    return { id: item.id, outcome: 'failed', error: err.message, systemic };
   } finally {
     client.release();
   }
@@ -128,8 +150,24 @@ export async function runTranslationTick() {
   );
 
   const results = [];
-  for (const item of claimed) {
-    results.push(await processItem(item));
+  for (let i = 0; i < claimed.length; i++) {
+    const result = await processItem(claimed[i]);
+    results.push(result);
+    if (result.systemic) {
+      // Once the provider/quota is confirmed down for this tick, further
+      // calls in the same batch are just as doomed — stop spending them.
+      // The items already claimed (status='translating') but not yet
+      // attempted must be put back to 'new' explicitly, or they'd be stuck
+      // forever — 'translating' isn't a status the claim query ever re-picks
+      // up.
+      const remaining = claimed.slice(i + 1).map((c) => c.id);
+      if (remaining.length > 0) {
+        await pool.query(`UPDATE raw_items SET status = 'new', updated_at = now() WHERE id = ANY($1)`, [
+          remaining,
+        ]);
+      }
+      break;
+    }
   }
   return results;
 }

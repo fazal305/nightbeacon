@@ -49,22 +49,30 @@ async function doPoll(source) {
     throw err;
   }
 
-  const textMessages = messages.filter((m) => m.id != null);
+  const fetchedMessages = messages.filter((m) => m.id != null);
 
-  if (textMessages.length === 0) {
+  if (fetchedMessages.length === 0) {
     await recordPollSuccess(source.id, source.last_seen_id, 0);
     return { inserted: 0, maxId: source.last_seen_id };
   }
 
-  // Never trust API return order for "the newest id" — compute it explicitly.
-  const maxId = textMessages.reduce((max, m) => Math.max(max, m.id), source.last_seen_id);
+  // last_seen_id must advance past every fetched message, including
+  // media-only ones we choose not to store — otherwise a channel that's
+  // mostly media-only posts would have its minId never move forward, and
+  // every poll would keep re-fetching (and re-skipping) the same backlog.
+  const maxId = fetchedMessages.reduce((max, m) => Math.max(max, m.id), source.last_seen_id);
+
+  // Media-only posts (no caption text) carry nothing for translation/
+  // classification to work with — skip storing them rather than filling
+  // raw_items with rows that will only ever show "No text (media-only post)".
+  const messagesToInsert = fetchedMessages.filter((m) => m.message && m.message.trim());
 
   const txClient = await pool.connect();
   let insertedCount = 0;
   try {
     await txClient.query('BEGIN');
 
-    for (const m of textMessages) {
+    for (const m of messagesToInsert) {
       const result = await txClient.query(
         `INSERT INTO raw_items (source_id, telegram_message_id, telegram_date, raw_text, raw_metadata, has_media)
          VALUES ($1, $2, $3, $4, $5, $6)

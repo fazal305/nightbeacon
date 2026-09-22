@@ -32,9 +32,12 @@ test('translation tick never overwrites raw_text, even on failure', async () => 
   ]);
 
   // No OPENROUTER_API_KEY in the test environment, so this must fail gracefully —
-  // the important assertion is that raw_text is untouched either way.
+  // the important assertion is that raw_text is untouched either way. A
+  // "not configured" failure isn't item-specific, so it's treated as systemic
+  // and reverts to 'new' (preserving retry budget) rather than
+  // 'failed_translation' — see isSystemicFailure in translate.js.
   assert.equal(after.rows[0].raw_text, originalText);
-  assert.ok(['failed_translation', 'translated'].includes(after.rows[0].status));
+  assert.ok(['new', 'failed_translation', 'translated'].includes(after.rows[0].status));
 
   await pool.query('DELETE FROM raw_items WHERE source_id = $1', [sourceId]);
   await pool.query('DELETE FROM sources WHERE id = $1', [sourceId]);

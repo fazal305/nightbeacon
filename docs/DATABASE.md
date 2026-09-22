@@ -67,6 +67,15 @@ requirement (never present generated output as verified fact — see
 `docs/ARCHITECTURE.md`'s product assessment on why severity/confidence were
 deliberately deferred rather than added speculatively).
 
+On every server boot, `recoverOrphanedStatuses()` resets any `translating` →
+`new` and `tagging` → `translated` rows left behind by a previous process
+that crashed or restarted mid-claim. These are claim-in-progress statuses
+that only make sense while the claiming process is alive; the claim queries
+never pick them up again on their own, so without this a crash at the wrong
+moment would strand items invisibly forever, unlike the failure states
+(`failed_translation`/`failed_tagging`), which are at least visible in the
+UI and retried automatically.
+
 Classification is entirely rule-based (`classificationRules.js` — keyword
 lists, no LLM call) per the project's principle: prefer deterministic rules
 where they're reliable, reserve the LLM for translation where it earns its

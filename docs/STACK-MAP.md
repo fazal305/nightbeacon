@@ -15,7 +15,7 @@ impressive.
 | PostgreSQL (`pg`) | Relational persistence; constraints (not application code) enforce Telegram-message dedup. |
 | `telegram` (GramJS) | MTProto client for read-only Telegram polling — see `docs/SECURITY.md` for its maintenance-status risk note. |
 | `node-cron` | Scheduled polling/processing ticks inside the single Express process (see `docs/ARCHITECTURE.md` for why no separate worker yet). |
-| OpenRouter (`inclusionai/ling-3.0-flash-vl:free` default) | Translation of non-English posts; model is configurable via `OPENROUTER_MODEL` since the free-tier roster rotates and individual free models get temporarily rate-limited upstream — switched away from the original default (`google/gemma-4-26b-a4b-it:free`) after live testing found it saturated. |
+| Groq (`openai/gpt-oss-20b` default) | Translation of non-English posts; the primary LLM provider — swapped in after OpenRouter's free tier turned out to cap at 50 req/day account-wide (not per-minute as first assumed), which a 400+ source backlog exhausted within minutes. Selected via `LLM_PROVIDER`, with OpenRouter kept as a configurable fallback (`server/src/processing/llmClient.js` — both are OpenAI-compatible chat-completions APIs, so switching providers is a config change, not a code change). |
 | `bcryptjs` | Password hashing for the single operator account. |
 | `express-session` + `connect-pg-simple` | httpOnly cookie sessions backed by Postgres, not a bare JWT. |
 | `zod` | Request validation at the API boundary. |

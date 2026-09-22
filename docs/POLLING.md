@@ -69,6 +69,14 @@ Each row in `sources` tracks polling state for one channel:
 | Database unavailable | The poll attempt fails outright (can't open a transaction); nothing partial was ever committed. |
 | Translation provider unavailable | Does not touch ingestion — decoupled pipeline stage (see `docs/DATABASE.md` processing lifecycle). |
 
+## Crash recovery for processing stages (not ingestion-specific, but related)
+
+Ingestion itself is already crash-safe via the transactional insert (see
+above). The translation/classification stages have an analogous concern:
+their claim-in-progress statuses (`translating`, `tagging`) can be orphaned
+if the process crashes or restarts mid-claim. Fixed via
+`recoverOrphanedStatuses()`, run on every boot — see `docs/DATABASE.md`.
+
 ## Backfill
 
 Not automated. A historical backfill is a manual, explicit operation (passing a

@@ -50,8 +50,9 @@ this required.
 - Clean SEO/social metadata (`robots`, canonical, Open Graph, Twitter Card)
   and a private-dashboard-appropriate `noindex` directive
 - Automated translation (Phase 2) — deterministic English-skip detection,
-  OpenRouter for real translation, original text never overwritten on
-  failure, visually distinct "Automated translation" provenance labeling
+  pluggable LLM provider (Groq by default, OpenRouter as a fallback) for
+  real translation, original text never overwritten on failure, visually
+  distinct "Automated translation" provenance labeling
 - Deterministic classification (Phase 3) — rule-based category/priority
   scoring and descriptive tags, with real database-level feed filtering by
   category and priority
@@ -75,7 +76,7 @@ See [`docs/STACK-MAP.md`](docs/STACK-MAP.md) for why each dependency exists.
 
 React · Vite · Tailwind CSS · TanStack Query · Zustand · React Router ·
 react-i18next · Node.js · Express · PostgreSQL · GramJS · node-cron ·
-OpenRouter
+Groq / OpenRouter
 
 ## Project structure
 
