@@ -40,7 +40,7 @@ fetched-all-then-filtered client-side):
 | `category` | string | `raw_items.category` (see `GET /api/taxonomy`) |
 | `priority` | string | `raw_items.priority` (`high`/`medium`/`low`/`informational`) |
 | `from` / `to` | ISO date | `telegram_date` range |
-| `cursor` | integer | `raw_items.id` cursor for pagination (descending) |
+| `cursor` | string | Opaque keyset cursor `"<telegram_date ISO>_<id>"`, echoed back from a previous response's `nextCursor` |
 | `limit` | integer, 1–100, default 50 | page size |
 
 Response: `{ items: [...], nextCursor: number | null }`. Each item includes

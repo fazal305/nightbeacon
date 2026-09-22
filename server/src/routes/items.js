@@ -11,9 +11,25 @@ const querySchema = z.object({
   priority: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
-  cursor: z.coerce.number().int().positive().optional(),
+  // Opaque keyset cursor: "<telegram_date ISO>_<id>". Sorting is by
+  // telegram_date (when the post actually happened on Telegram), not id
+  // (insertion/collection order) — with 400+ sources polling on staggered
+  // cycles plus a historical backfill, those two orderings diverge a lot.
+  // `id` breaks ties when two posts share the same telegram_date.
+  cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
 });
+
+function parseCursor(cursor) {
+  const sepIndex = cursor.lastIndexOf('_');
+  if (sepIndex === -1) return null;
+  const dateStr = cursor.slice(0, sepIndex);
+  const idStr = cursor.slice(sepIndex + 1);
+  const id = Number(idStr);
+  const date = new Date(dateStr);
+  if (Number.isNaN(id) || Number.isNaN(date.getTime())) return null;
+  return { date, id };
+}
 
 itemsRouter.get('/', async (req, res) => {
   const parsed = querySchema.safeParse(req.query);
@@ -50,8 +66,12 @@ itemsRouter.get('/', async (req, res) => {
     conditions.push(`ri.telegram_date <= $${params.length}`);
   }
   if (cursor) {
-    params.push(cursor);
-    conditions.push(`ri.id < $${params.length}`);
+    const parsedCursor = parseCursor(cursor);
+    if (!parsedCursor) {
+      return res.status(400).json({ error: 'Invalid cursor' });
+    }
+    params.push(parsedCursor.date, parsedCursor.id);
+    conditions.push(`(ri.telegram_date, ri.id) < ($${params.length - 1}, $${params.length})`);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -66,12 +86,13 @@ itemsRouter.get('/', async (req, res) => {
      JOIN sources s ON s.id = ri.source_id
      LEFT JOIN translations t ON t.raw_item_id = ri.id
      ${where}
-     ORDER BY ri.id DESC
+     ORDER BY ri.telegram_date DESC, ri.id DESC
      LIMIT $${params.length}`,
     params
   );
 
-  const nextCursor = rows.length === limit ? rows[rows.length - 1].id : null;
+  const last = rows[rows.length - 1];
+  const nextCursor = rows.length === limit ? `${last.telegram_date.toISOString()}_${last.id}` : null;
   res.json({ items: rows, nextCursor });
 });
 

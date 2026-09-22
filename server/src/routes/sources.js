@@ -11,7 +11,7 @@ sourcesRouter.get('/', async (req, res) => {
      FROM sources s
      LEFT JOIN raw_items ri ON ri.source_id = s.id
      GROUP BY s.id
-     ORDER BY s.display_name`
+     ORDER BY s.first_tracked_at DESC`
   );
   res.json(rows);
 });
@@ -35,7 +35,7 @@ sourcesRouter.get('/:id', async (req, res) => {
     `SELECT id, telegram_message_id, telegram_date, raw_text, status, category, priority
      FROM raw_items
      WHERE source_id = $1
-     ORDER BY id DESC
+     ORDER BY telegram_date DESC, id DESC
      LIMIT 10`,
     [req.params.id]
   );

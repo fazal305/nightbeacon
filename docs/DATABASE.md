@@ -33,9 +33,19 @@ retry-attempt counters.
 Indexes:
 - `idx_raw_items_status` — the tagging/translation claim queries and status
   filters both hit this.
-- `idx_raw_items_collected_at` (`DESC`) — the default feed ordering.
+- `idx_raw_items_collected_at` (`DESC`) — when a row was ingested (not
+  displayed anywhere as the primary sort, but useful for ingestion-focused
+  queries/debugging).
 - `idx_raw_items_source_date` (`source_id, telegram_date DESC`) — per-source
   recency, used by the Source Inspector and per-source feed filtering.
+- `idx_raw_items_telegram_date` (`telegram_date DESC, id DESC`) — the
+  **default feed ordering** (Dashboard, Live Monitor). Added after real
+  usage at 400+ sources exposed that `id` order (insertion/collection
+  order) and `telegram_date` order (when a post actually happened on
+  Telegram) diverge significantly once many sources poll on staggered
+  cycles and a historical backfill is involved — "most recent" must mean
+  most recently *posted*, not most recently *collected*. `id` is the
+  tie-break for posts sharing an identical `telegram_date`.
 
 ### `users` / `session`
 Single operator credential (bcrypt hash) and a server-side session store
