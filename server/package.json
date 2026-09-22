@@ -8,9 +8,10 @@
     "start": "node src/server.js",
     "migrate": "node src/db/migrate.js",
     "seed:source": "node src/db/seedSource.js",
+    "seed:sources-bulk": "node src/db/seedSourcesBulk.js",
     "seed:operator": "node src/db/seedOperator.js",
     "telegram:login": "node src/ingestion/generateSession.js",
-    "test": "node --test src/ingestion/*.test.js src/processing/*.test.js src/subsystems/*.test.js"
+    "test": "node --import ./src/testSetup.mjs --test src/ingestion/*.test.js src/processing/*.test.js src/subsystems/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

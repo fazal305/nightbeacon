@@ -4,7 +4,7 @@ import { runTranslationTick } from '../processing/translate.js';
 import { runClassificationTick } from '../processing/classify.js';
 import { recordRun } from '../subsystems/recordRun.js';
 
-const POLL_SCHEDULE = process.env.POLL_CRON_SCHEDULE || '*/2 * * * *'; // every 2 minutes
+const POLL_SCHEDULE = process.env.POLL_CRON_SCHEDULE || '*/5 * * * *'; // every 5 minutes — see POLL_INTER_SOURCE_DELAY_MS in pollSource.js for why, once source count grows
 const TRANSLATE_SCHEDULE = process.env.TRANSLATE_CRON_SCHEDULE || '*/1 * * * *'; // every 1 minute
 const CLASSIFY_SCHEDULE = process.env.CLASSIFY_CRON_SCHEDULE || '*/1 * * * *'; // every 1 minute
 

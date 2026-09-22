@@ -38,7 +38,17 @@ Each row in `sources` tracks polling state for one channel:
    a database-level lock, so it stays correct if ingestion is later split into a
    separate worker process — no in-memory lock would survive that split safely.
 
-5. **Retries happen on the next scheduled tick**, not an immediate in-process
+5. **A small inter-source delay** (`POLL_INTER_SOURCE_DELAY_MS`, default 750ms)
+   separates sequential per-source polls within a tick. With one source this
+   doesn't matter; once the source count grows into the hundreds (Nightbeacon
+   currently monitors 128 channels resolved from operator-provided Telegram
+   chat-folder invite links), firing that many `getMessages` calls back-to-
+   back on one MTProto connection risks Telegram's flood-wait rate limiting —
+   which would then penalize every source, not just the ones polled late in
+   the loop. The default poll schedule was widened from 2 to 5 minutes to
+   give a full cycle across all sources enough headroom
+   (`POLL_CRON_SCHEDULE`).
+6. **Retries happen on the next scheduled tick**, not an immediate in-process
    retry loop. A failed poll increments `poll_error_count` and records
    `last_error`; it does not hammer Telegram. (A cooldown/backoff after N
    consecutive failures is a natural extension, not required for the single

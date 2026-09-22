@@ -14,7 +14,19 @@ gives one analyst a filterable feed to triage incoming information — without
 manually checking every channel. It is not a social network, generic
 Telegram client, or multi-tenant SaaS product.
 
-## Features (Phase 1)
+## Status
+
+**Live.** Real Telegram ingestion, translation, and classification are
+running end to end. Started with the Middle East Spectator channel (100
+real messages polled, translated, and classified on 2026-09-22), then
+expanded to 128 channels resolved from operator-provided Telegram
+chat-folder invite links (read-only resolution via
+`chatlists.CheckChatlistInvite` — never joins anything). The poll loop
+gained a small inter-source delay and a widened 5-minute schedule to stay
+under Telegram's flood-wait limits at this scale — see
+[`docs/POLLING.md`](docs/POLLING.md).
+
+## Features
 
 - Scheduled, deduplicated Telegram channel polling (GramJS/MTProto)
 - Crash-safe ingestion — see [`docs/POLLING.md`](docs/POLLING.md)
@@ -83,16 +95,19 @@ See [`SECURITY.md`](SECURITY.md) and [`docs/SECURITY.md`](docs/SECURITY.md).
 Telegram session strings and API keys are never committed — only
 `.env.example` placeholders are tracked.
 
-## Limitations (Phase 6)
+## Limitations
 
 - Alerts are not yet implemented.
-- Only one channel is monitored; source management (add/edit from the UI)
-  is deferred — sources are seeded via `npm run seed:source`.
-- Only one channel is currently monitored (seeded via `npm run seed:source`).
-- Translation requires `OPENROUTER_API_KEY` to be set; without it, non-English
-  items are correctly marked `failed_translation` (original text preserved)
-  rather than silently skipped.
-- No production deployment yet — see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+- Only one channel is currently monitored; source management (add/edit from
+  the UI) is deferred — sources are seeded via `npm run seed:source`.
+- Deployment scripts are prepared (see `deploy/` and
+  [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)) but not yet run against a live
+  GCP account — the app currently runs locally only.
+- The deterministic classifier is keyword-based and can false-positive on
+  ambiguous phrasing (e.g. a press-conference story mentioning "attack" and
+  "president" was scored Security Incident/High) — it's intentionally simple
+  and transparent rather than a black box; tune `classificationRules.js` as
+  real data surfaces patterns worth refining.
 
 ## Roadmap
 

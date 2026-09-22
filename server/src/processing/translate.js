@@ -2,7 +2,11 @@ import { pool } from '../db/pool.js';
 import { callOpenRouter } from './openrouter.js';
 import { looksLikeEnglish } from './detectLanguage.js';
 
-const BATCH_SIZE = 5; // stay well under free-tier OpenRouter rate limits per tick
+// OpenRouter free tier caps at 20 req/min; the tick runs once per minute, so
+// 15 leaves headroom for retries without tripping the limit. Raised from 5
+// once real multi-channel volume (128 sources, thousands of backlog items)
+// made the old value too slow to ever clear a realistic backlog.
+const BATCH_SIZE = 15;
 const MAX_ATTEMPTS = 5;
 
 const LANG_CODE_RE = /^[a-z]{2,3}$/i;

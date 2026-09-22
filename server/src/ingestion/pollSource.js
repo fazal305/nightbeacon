@@ -122,16 +122,29 @@ async function recordPollFailure(sourceId, errorMessage) {
   );
 }
 
+// A small delay between sequential per-source polls. With only a handful of
+// sources this doesn't matter, but once the source count grows (tens to low
+// hundreds), firing that many getMessages calls back-to-back on one MTProto
+// connection risks Telegram's flood-wait rate limiting — which would then
+// penalize every source, not just the ones added late. Configurable so it
+// can be tuned without a code change if the source count grows further.
+const INTER_SOURCE_DELAY_MS = Number(process.env.POLL_INTER_SOURCE_DELAY_MS || 750);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function pollAllEnabledSources() {
   const { rows: sources } = await pool.query('SELECT * FROM sources WHERE enabled = true');
   const results = [];
-  for (const source of sources) {
+  for (const [index, source] of sources.entries()) {
     try {
       const result = await pollSource(source);
       results.push({ sourceId: source.id, ...result });
     } catch (err) {
       results.push({ sourceId: source.id, error: err.message });
     }
+    if (index < sources.length - 1) await sleep(INTER_SOURCE_DELAY_MS);
   }
   return results;
 }

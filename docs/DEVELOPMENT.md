@@ -64,6 +64,23 @@ Frontend: http://localhost:5173 (proxies `/api` to the backend on port 4000).
 
 ## Tests
 
+Tests run against a **separate database** from your dev `DATABASE_URL` —
+never against a database that might hold real ingested data (a 128-channel
+backlog crowding out a test's own rows in a claim query is exactly the kind
+of flaky failure this avoids). One-time setup:
+
+```bash
+createdb nightbeacon_test
+cd server
+echo "DATABASE_URL=postgres://nightbeacon:<password>@localhost:5432/nightbeacon_test" > .env.test
+DATABASE_URL=postgres://nightbeacon:<password>@localhost:5432/nightbeacon_test node src/db/migrate.js
+```
+
+Then just:
+
 ```bash
 cd server && npm test
 ```
+
+(`npm test` preloads `.env.test` via `--import ./src/testSetup.mjs`, so it
+always targets the test database regardless of what `.env` points at.)
