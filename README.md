@@ -18,13 +18,15 @@ Telegram client, or multi-tenant SaaS product.
 
 **Live.** Real Telegram ingestion, translation, and classification are
 running end to end. Started with the Middle East Spectator channel (100
-real messages polled, translated, and classified on 2026-09-22), then
-expanded to 128 channels resolved from operator-provided Telegram
-chat-folder invite links (read-only resolution via
-`chatlists.CheckChatlistInvite` — never joins anything). The poll loop
-gained a small inter-source delay and a widened 5-minute schedule to stay
-under Telegram's flood-wait limits at this scale — see
-[`docs/POLLING.md`](docs/POLLING.md).
+real messages), then expanded to **445 channels** resolved from eight
+operator-provided Telegram chat-folder invite links (read-only resolution
+via `chatlists.CheckChatlistInvite` — never joins anything; re-run
+`npm run seed:sources-bulk` any time to add more folders, it's idempotent).
+At this scale a full poll cycle covers a large, realistic backlog
+(12,000+ real items and growing) — translation/classification work through
+it continuously in the background rather than all at once; see
+[`docs/POLLING.md`](docs/POLLING.md) for the flood-wait-safe throttling
+this required.
 
 ## Features
 

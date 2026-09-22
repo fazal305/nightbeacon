@@ -16,6 +16,9 @@ const FOLDER_SLUGS = [
   'EFqQ6tg9E1U4N2M0',
   'FpmHjPqRVaA1ZDg1',
   'Zc3tjDDszXM3YTVk',
+  'nClKBSp2_IFhMzNk',
+  'vLHZ7uIX4_UwMWJk',
+  'PxPvtkVpX305YjE0',
 ];
 
 const RELIABILITY_NOTE =
