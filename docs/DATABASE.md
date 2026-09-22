@@ -47,9 +47,19 @@ bare JWT — see `docs/SECURITY.md`).
 `raw_item_id` FK, `UNIQUE(raw_item_id)` — a retry does `ON CONFLICT (raw_item_id)
 DO UPDATE`, overwriting this row, never touching `raw_items.raw_text`.
 `status`: `pending` / `done` / `failed` / `skipped_same_language` (the last
-covers both "already English" and "no text to translate", decided
-deterministically by `detectLanguage.js` — a script-detection regex, not an
-LLM call, per the project's "prefer deterministic rules" principle). The
+covers "no text to translate", purely-English content, and meaningfully
+mixed-language content — see below). Decided deterministically by
+`detectLanguage.js`, not an LLM call, per the project's "prefer
+deterministic rules" principle.
+
+`looksLikeEnglish()` skips translation once Latin-script letters make up
+≥15% of a post's total script letters — not just purely-English text. A
+bilingual post an analyst can already partly read isn't worth an LLM call,
+especially under real free-tier quota pressure (see the ADR on translation
+provider limits). A single English hashtag/mention buried in an otherwise
+fully foreign-script post stays below that threshold and still gets
+translated, since that scrap of English isn't enough to make the post
+readable on its own. The
 translation job claims rows with `FOR UPDATE SKIP LOCKED` from
 `raw_items WHERE status = 'new' OR (status = 'failed_translation' AND
 translation_attempts < 5)`, batches 5 per tick to stay under OpenRouter's

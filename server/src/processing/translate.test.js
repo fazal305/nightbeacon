@@ -11,6 +11,21 @@ test('looksLikeEnglish: deterministic script detection', () => {
   assert.equal(looksLikeEnglish(null), null);
 });
 
+test('looksLikeEnglish: skips translation for meaningfully mixed-language content too', () => {
+  // Mostly English with a couple of Arabic words mixed in — skip translation,
+  // the analyst can already read the bulk of this without an LLM call.
+  assert.equal(
+    looksLikeEnglish('Breaking news from the region, sources say حرب عاجل near the border today morning.'),
+    true
+  );
+  // A single English hashtag/mention buried in an otherwise fully
+  // Arabic-script post is not "meaningful" English — still needs translating.
+  assert.equal(
+    looksLikeEnglish('هذا خبر عاجل جدا من المنطقة اليوم صباحا بالقرب من الحدود مباشرة #test'),
+    false
+  );
+});
+
 test('translation tick never overwrites raw_text, even on failure', async () => {
   const src = await pool.query(
     `INSERT INTO sources (channel_username, display_name) VALUES ($1, $2) RETURNING id`,
