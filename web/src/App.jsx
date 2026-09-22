@@ -1,20 +1,18 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
 import Login from './routes/Login';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Feed from './routes/Feed';
+import LiveMonitor from './routes/LiveMonitor';
 import Sources from './routes/Sources';
 import SourceInspector from './routes/SourceInspector';
 import Activity from './routes/Activity';
 import ContentInspector from './routes/ContentInspector';
 import Settings from './routes/Settings';
-import ComingSoon from './components/ComingSoon';
 import NotFound from './routes/NotFound';
 
 export default function App() {
-  const { t } = useTranslation();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -32,7 +30,7 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Feed />} />
-        <Route path="/live" element={<ComingSoon title={t('nav.live')} />} />
+        <Route path="/live" element={<LiveMonitor />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/sources/:id" element={<SourceInspector />} />
         <Route path="/activity" element={<Activity />} />

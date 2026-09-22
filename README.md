@@ -39,6 +39,10 @@ this required.
 - Crash-safe ingestion — see [`docs/POLLING.md`](docs/POLLING.md)
 - Session-authenticated single-operator dashboard
 - Real-time-refreshing feed with source/status filtering
+- Live Monitor: a faster-refreshing (15s), priority-focused stream separate
+  from the historical Dashboard, with a ticking "checked Ns ago" freshness
+  indicator and a dismissible "N new items" banner instead of silently
+  reordering the list under an analyst mid-read
 - Content inspector: original text, translation, classification, retry
   attempt counts, and collapsible raw Telegram metadata for full provenance
 - Dedicated Source Inspector page: reliability note, language, first-tracked

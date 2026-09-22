@@ -27,6 +27,13 @@ const resources = {
         offline: 'Offline — showing cached data',
         stale: 'Stale',
       },
+      live: {
+        checkedAgo: 'Checked {{seconds}}s ago · next check in {{nextIn}}s',
+        priorityLabel: 'Priority:',
+        priorityAll: 'All',
+        newItems: '{{count}} new item — show',
+        newItems_other: '{{count}} new items — show',
+      },
       settings: {
         title: 'Settings',
         language: 'Language',
@@ -68,6 +75,13 @@ const resources = {
         refreshing: 'جارٍ التحديث…',
         offline: 'غير متصل — يتم عرض بيانات مخزنة',
         stale: 'قديم',
+      },
+      live: {
+        checkedAgo: 'تم الفحص منذ {{seconds}} ث · الفحص التالي خلال {{nextIn}} ث',
+        priorityLabel: 'الأولوية:',
+        priorityAll: 'الكل',
+        newItems: 'عنصر جديد واحد — عرض',
+        newItems_other: '{{count}} عناصر جديدة — عرض',
       },
       settings: {
         title: 'الإعدادات',
