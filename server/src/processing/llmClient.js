@@ -37,13 +37,25 @@ export async function callLLM(messages) {
     throw new Error(`${provider.apiKeyEnv} / ${provider.modelEnv} not configured`);
   }
 
+  const body = { model, messages, temperature: 0.2 };
+  // Groq's open-weight "reasoning" models (gpt-oss family) spend a large
+  // share of their token budget on an internal chain-of-thought trace by
+  // default — measured ~260 reasoning tokens for a one-sentence translation,
+  // more than the actual answer. A task like translation doesn't need heavy
+  // reasoning; capping effort to "low" cut total tokens per call by ~60%
+  // (389 -> 162 measured) with identical output quality, which matters a lot
+  // against Groq's per-minute token ceiling at real ingestion volume.
+  if (providerName === 'groq' && model.includes('gpt-oss')) {
+    body.reasoning_effort = 'low';
+  }
+
   const res = await fetch(provider.url, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model, messages, temperature: 0.2 }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

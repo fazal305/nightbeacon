@@ -24,6 +24,16 @@ tier — roughly two orders of magnitude more headroom than OpenRouter's
 50/day, with no separate daily cap observed. Verified with real production
 translations (Arabic/Russian OSINT posts) producing accurate, fluent output.
 
+**Update:** at real ingestion volume, the binding constraint turned out to be
+Groq's **tokens-per-minute** limit (8000 TPM), not the request-count limit —
+`gpt-oss-20b` is a reasoning model that spends a large share of its output on
+an internal chain-of-thought trace by default (measured ~260 reasoning
+tokens for translating a single sentence, more than the answer itself).
+Setting `reasoning_effort: 'low'` for this model family cut total tokens per
+call by ~60% (389 → 162, measured) with identical output quality — a
+translation task doesn't need heavy reasoning. See
+`server/src/processing/llmClient.js`.
+
 **Consequences:**
 - `translate.js`'s `BATCH_SIZE` raised from 15 to 50/min accordingly.
 - A related bug this exposed was fixed independently of the provider switch:
