@@ -69,6 +69,35 @@ Each row in `sources` tracks polling state for one channel:
 | Database unavailable | The poll attempt fails outright (can't open a transaction); nothing partial was ever committed. |
 | Translation provider unavailable | Does not touch ingestion — decoupled pipeline stage (see `docs/DATABASE.md` processing lifecycle). |
 
+## A real flood-wait, and what actually caused it
+
+At 442 real sources, 184 hit a genuine Telegram flood-wait (`A wait of ~64500
+seconds is required (caused by contacts.ResolveUsername)` — ~18 hours) on
+2026-09-22. Two contributing causes, both understood after the fact:
+
+1. **`ResolveUsername` has its own, much stricter rate limit** than message
+   fetching. It only runs once per username per process lifetime (GramJS
+   caches the resolved entity afterward), but adding ~440 sources in two
+   large batches meant ~440 first-time resolutions competing for that
+   budget within a short window — the existing 750ms
+   `POLL_INTER_SOURCE_DELAY_MS` throttle wasn't tuned with this
+   Telegram-side method-specific limit in mind, only the general
+   flood-wait risk on `getMessages` itself.
+2. **Manual verification scripts compounded it.** Several one-off
+   `pollSource`/`pollAllEnabledSources` invocations were run directly
+   (outside the cron schedule) to verify behavior during development,
+   stacking additional resolve attempts on top of the live server's own
+   scheduled ticks. Operationally: avoid manually triggering extra poll
+   attempts against the real Telegram account while the live server is
+   already polling — the throttling is designed around one active poller,
+   not two running concurrently.
+
+No code changes were needed for this specific incident — it resolves on its
+own once the wait period elapses, and already-resolved sources are
+unaffected (GramJS's entity cache survives). If Nightbeacon grows well
+beyond ~450 sources, revisit whether `ResolveUsername` calls need their own,
+separate, more conservative pacing from `getMessages` calls.
+
 ## Crash recovery for processing stages (not ingestion-specific, but related)
 
 Ingestion itself is already crash-safe via the transactional insert (see
