@@ -26,6 +26,7 @@ const resources = {
         refreshing: 'Refreshing…',
         offline: 'Offline — showing cached data',
         stale: 'Stale',
+        posted: 'Posted',
       },
       live: {
         checkedAgo: 'Checked {{seconds}}s ago · next check in {{nextIn}}s',
@@ -75,6 +76,7 @@ const resources = {
         refreshing: 'جارٍ التحديث…',
         offline: 'غير متصل — يتم عرض بيانات مخزنة',
         stale: 'قديم',
+        posted: 'نُشر',
       },
       live: {
         checkedAgo: 'تم الفحص منذ {{seconds}} ث · الفحص التالي خلال {{nextIn}} ث',

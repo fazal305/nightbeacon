@@ -1,13 +1,27 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import StatusBadge from './StatusBadge';
 import PriorityBadge, { CategoryBadge } from './PriorityBadge';
 
 function formatTimestamp(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString();
+  // Explicit date + time, not just a relative locale string — this is the
+  // Telegram-reported post time specifically (telegram_date), not when
+  // Nightbeacon collected it, and that distinction matters enough (see
+  // docs/DATABASE.md on feed ordering) to spell out rather than leave
+  // ambiguous.
+  return new Date(iso).toLocaleString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
 }
 
 export default function FeedItem({ item }) {
+  const { t } = useTranslation();
   return (
     <Link
       to={`/content/${item.id}`}
@@ -33,14 +47,15 @@ export default function FeedItem({ item }) {
       {item.translation_status === 'done' && item.translated_text && (
         <p className="mt-1 line-clamp-2 border-s-2 border-accent/40 ps-2 text-sm text-text-muted">
           <span className="mr-1 font-mono text-[10px] uppercase tracking-wide text-accent">
-            Automated translation
+            {t('feed.automatedTranslation')}
           </span>
           <br />
           {item.translated_text}
         </p>
       )}
-      <div className="mt-1 font-mono text-xs text-text-muted">
-        {formatTimestamp(item.telegram_date)}
+      <div className="mt-1 flex items-center gap-1 font-mono text-xs text-text-muted">
+        <span className="uppercase tracking-wide">{t('feed.posted')}</span>
+        <span>{formatTimestamp(item.telegram_date)}</span>
       </div>
     </Link>
   );
