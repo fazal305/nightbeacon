@@ -35,6 +35,11 @@ const resources = {
         newItems: '{{count}} new item — show',
         newItems_other: '{{count}} new items — show',
       },
+      filters: {
+        allSources: 'All sources',
+        searchSources: 'Search sources…',
+        noSourcesMatch: 'No sources match.',
+      },
       settings: {
         title: 'Settings',
         language: 'Language',
@@ -84,6 +89,11 @@ const resources = {
         priorityAll: 'الكل',
         newItems: 'عنصر جديد واحد — عرض',
         newItems_other: '{{count}} عناصر جديدة — عرض',
+      },
+      filters: {
+        allSources: 'كل المصادر',
+        searchSources: 'ابحث عن مصدر…',
+        noSourcesMatch: 'لا توجد مصادر مطابقة.',
       },
       settings: {
         title: 'الإعدادات',

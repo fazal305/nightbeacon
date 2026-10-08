@@ -1,7 +1,9 @@
 import { pool } from '../db/pool.js';
 import { classify } from './classificationRules.js';
+import { classifyWithJev, isJevRateLimit } from './jevClassify.js';
 
 const BATCH_SIZE = 20; // deterministic, no external API — can process a larger batch per tick
+const MAX_ATTEMPTS = 5;
 
 async function ensureTagIds(client, tagNames) {
   if (tagNames.length === 0) return [];
@@ -17,7 +19,7 @@ async function ensureTagIds(client, tagNames) {
   return existing.rows;
 }
 
-async function processItem(item) {
+async function processItemRule(item) {
   const client = await pool.connect();
   try {
     // Classify on the translated text when available (it's what an English-reading
@@ -56,7 +58,41 @@ async function processItem(item) {
   }
 }
 
-const MAX_ATTEMPTS = 5;
+// Jev (see docs/adr/0005-jev-classification.md) answers category/priority
+// directly — no keyword extraction, so it produces no item_tags rows.
+// Deliberately not the default: it's a paid external call replacing a free,
+// instant, deterministic one, so it's opt-in via CLASSIFICATION_PROVIDER.
+async function processItemJev(item) {
+  const client = await pool.connect();
+  try {
+    const textToClassify = item.translated_text || item.raw_text;
+    const { category, priority } = await classifyWithJev(textToClassify);
+
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE raw_items SET category = $2, priority = $3, status = 'ready', updated_at = now() WHERE id = $1`,
+      [item.id, category, priority]
+    );
+    await client.query('COMMIT');
+    return { id: item.id, outcome: 'ready', category, priority, tagCount: 0 };
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    // A rate-limited account isn't this item's fault and won't clear sooner
+    // by burning its tagging_attempts budget — same reasoning as translate.js's
+    // isSystemicFailure handling for the Groq provider. Reverts to 'translated'
+    // (not 'new') so the claim query, not ingestion, picks it back up.
+    const systemic = isJevRateLimit(err);
+    await pool.query(
+      systemic
+        ? `UPDATE raw_items SET status = 'translated', updated_at = now() WHERE id = $1`
+        : `UPDATE raw_items SET status = 'failed_tagging', tagging_attempts = tagging_attempts + 1, updated_at = now() WHERE id = $1`,
+      [item.id]
+    );
+    return { id: item.id, outcome: 'failed', error: err.message, systemic };
+  } finally {
+    client.release();
+  }
+}
 
 export async function runClassificationTick() {
   const { rows: claimed } = await pool.query(
@@ -74,9 +110,30 @@ export async function runClassificationTick() {
     [MAX_ATTEMPTS, BATCH_SIZE]
   );
 
+  if (claimed.length === 0) return [];
+
+  const provider = (process.env.CLASSIFICATION_PROVIDER || 'rule').toLowerCase();
+  const processItem = provider === 'jev' ? processItemJev : processItemRule;
+
   const results = [];
-  for (const item of claimed) {
-    results.push(await processItem(item));
+  for (let i = 0; i < claimed.length; i++) {
+    const result = await processItem(claimed[i]);
+    results.push(result);
+    if (result.systemic) {
+      // Same early-stop-and-revert pattern as translate.js: once the
+      // provider is confirmed rate-limited for this tick, further calls in
+      // the same batch are just as doomed. Items already claimed
+      // (status='tagging') but not yet attempted must be put back
+      // explicitly, or they'd be stuck forever — 'tagging' isn't a status
+      // the claim query ever re-picks up on its own.
+      const remaining = claimed.slice(i + 1).map((c) => c.id);
+      if (remaining.length > 0) {
+        await pool.query(`UPDATE raw_items SET status = 'translated', updated_at = now() WHERE id = ANY($1)`, [
+          remaining,
+        ]);
+      }
+      break;
+    }
   }
   return results;
 }
