@@ -23,6 +23,21 @@ npm run seed:source
 cd ../web && npm install
 ```
 
+## Portable PostgreSQL (optional)
+
+If PostgreSQL isn't installed as a Windows service but run from a portable
+folder (data in `<repo>/.pgdata`), set in `server/.env`:
+
+```bash
+PG_BIN_DIR=C:\path\to\postgresql-18.x\bin
+DATABASE_URL=postgres://nightbeacon:…@localhost:5434/nightbeacon   # port used for db:start
+```
+
+then `npm run db:start` / `db:stop` / `db:status` (from `server/`). A portable
+server doesn't start after a reboot by itself — run `db:start` first, and
+`db:stop` before shutting down so it isn't left needing crash recovery. The
+log is written to `<repo>/.pgdata.log`.
+
 ## Telegram proxy (optional)
 
 If Telegram is blocked on your network, set a proxy in `.env` before running
