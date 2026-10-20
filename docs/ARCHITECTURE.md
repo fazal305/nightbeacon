@@ -6,17 +6,19 @@ plus one Postgres database.
 
 ```
 Telegram (public channels, read-only)
-        |  GramJS (MTProto, user session)
+        |  GramJS (MTProto, user session): adaptive polling + push for joined channels
         v
-  node-cron poll job (per source, Postgres advisory-locked)
-        |  INSERT ... ON CONFLICT DO NOTHING (dedup)
+  ingestion scheduler (one request at a time, flood-wait aware, advisory-locked per source)
+        |  INSERT ... ON CONFLICT DO NOTHING (idempotent)
         v
    raw_items (Postgres)  -----------------------+
         |                                       |  subsystem_status
-        v  translation job (OpenRouter)         |  written after every
-   translations                                 |  run of every stage
-        |                                       |  (Phase 4)
-        v  classification job (rules + LLM)     |
+        v  dedup worker (hash / trigram /       |  written by every
+        |   multilingual embeddings) -> stories |  stage
+        v  translation worker (unique + updates)|
+   translations                                 |
+        |                                       |
+        v  classification worker (rules / Jev)  |
    tags / item_tags / priority  -----------------+
         |
         v
@@ -40,6 +42,9 @@ Telegram (public channels, read-only)
 - The concurrency design (Postgres advisory locks, not in-memory locks) means
   extracting a `worker/` process later requires no schema or locking changes —
   this is deliberately not a one-way door, just not needed yet.
+
+See [`PIPELINE.md`](PIPELINE.md) for the stage-by-stage design, the dedup
+rules, and the latency metrics endpoint.
 
 ## Processing lifecycle
 

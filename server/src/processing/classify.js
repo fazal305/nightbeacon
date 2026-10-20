@@ -1,8 +1,12 @@
 import { pool } from '../db/pool.js';
 import { classify } from './classificationRules.js';
 import { classifyWithJev, isJevRateLimit } from './jevClassify.js';
+import { claimBatch } from '../pipeline/claim.js';
 
-const BATCH_SIZE = 20; // deterministic, no external API — can process a larger batch per tick
+// The rule-based classifier is pure CPU and takes well under a millisecond
+// per item; the old 20-per-minute cap made this stage a backlog of its own
+// (1,200 items/hour max, below real ingestion volume).
+const BATCH_SIZE = Number(process.env.CLASSIFY_BATCH_SIZE || 200);
 const MAX_ATTEMPTS = 5;
 
 async function ensureTagIds(client, tagNames) {
@@ -31,7 +35,7 @@ async function processItemRule(item) {
     await client.query('BEGIN');
 
     await client.query(
-      `UPDATE raw_items SET category = $2, priority = $3, status = 'ready', updated_at = now() WHERE id = $1`,
+      `UPDATE raw_items SET category = $2, priority = $3, status = 'ready', ready_at = clock_timestamp(), updated_at = now() WHERE id = $1`,
       [item.id, category, priority]
     );
 
@@ -70,7 +74,7 @@ async function processItemJev(item) {
 
     await client.query('BEGIN');
     await client.query(
-      `UPDATE raw_items SET category = $2, priority = $3, status = 'ready', updated_at = now() WHERE id = $1`,
+      `UPDATE raw_items SET category = $2, priority = $3, status = 'ready', ready_at = clock_timestamp(), updated_at = now() WHERE id = $1`,
       [item.id, category, priority]
     );
     await client.query('COMMIT');
@@ -95,20 +99,14 @@ async function processItemJev(item) {
 }
 
 export async function runClassificationTick() {
-  const { rows: claimed } = await pool.query(
-    `UPDATE raw_items
-     SET status = 'tagging', updated_at = now()
-     WHERE id IN (
-       SELECT id FROM raw_items
-       WHERE (status = 'translated' OR (status = 'failed_tagging' AND tagging_attempts < $1))
-       ORDER BY id
-       LIMIT $2
-       FOR UPDATE SKIP LOCKED
-     )
-     RETURNING id, raw_text,
+  const claimed = await claimBatch({
+    eligibleSql: `(status = 'translated' OR (status = 'failed_tagging' AND tagging_attempts < $1))`,
+    eligibleParams: [MAX_ATTEMPTS],
+    claimStatus: 'tagging',
+    limit: BATCH_SIZE,
+    returning: `id, raw_text, telegram_date,
        (SELECT translated_text FROM translations t WHERE t.raw_item_id = raw_items.id) AS translated_text`,
-    [MAX_ATTEMPTS, BATCH_SIZE]
-  );
+  });
 
   if (claimed.length === 0) return [];
 

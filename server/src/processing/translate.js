@@ -2,6 +2,8 @@ import { pool } from '../db/pool.js';
 import { callLLM } from './llmClient.js';
 import { looksLikeEnglish } from './detectLanguage.js';
 import { translateBatch, isTelegramFloodWait, TRANSLATE_CHUNK_SIZE } from './telegramTranslate.js';
+import { claimBatch } from '../pipeline/claim.js';
+import { RateGate } from '../pipeline/rateGate.js';
 
 // Groq's free tier (default LLM provider, see llmClient.js) allows ~1000
 // requests/10min (~100/min sustained) and ~30k tokens/min — confirmed via
@@ -11,8 +13,14 @@ import { translateBatch, isTelegramFloodWait, TRANSLATE_CHUNK_SIZE } from './tel
 // tokens). Was 5, then 15 under OpenRouter's much stricter free tier before
 // its 50-req/day account-wide cap forced the provider switch — see
 // docs/POLLING.md and the ADR for that decision.
-const BATCH_SIZE = 50;
+//
+// Translation now runs as a continuous worker (see pipeline/workers.js), not
+// a once-a-minute cron batch, so the per-minute budget is enforced by
+// spacing calls rather than by batch size — a batch can't burst past it, and
+// a slow tick can no longer overlap the next one.
+const BATCH_SIZE = Number(process.env.TRANSLATE_BATCH_SIZE || 20);
 const MAX_ATTEMPTS = 5;
+const llmGate = new RateGate(60_000 / Number(process.env.TRANSLATE_MAX_PER_MINUTE || 50));
 
 const LANG_CODE_RE = /^[a-z]{2,3}$/i;
 
@@ -73,7 +81,10 @@ async function commitTranslation(id, translationRow) {
   try {
     await client.query('BEGIN');
     await upsertTranslation(client, { id, ...translationRow });
-    await client.query(`UPDATE raw_items SET status = 'translated', updated_at = now() WHERE id = $1`, [id]);
+    await client.query(
+      `UPDATE raw_items SET status = 'translated', translated_at = clock_timestamp(), updated_at = now() WHERE id = $1`,
+      [id]
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -109,6 +120,7 @@ async function processItemLLM(item) {
   if (skipped) return skipped;
 
   try {
+    await llmGate.wait();
     const result = await translateTextLLM(item.raw_text);
     await commitTranslation(item.id, {
       sourceLanguage: result.sourceLanguage,
@@ -225,21 +237,17 @@ async function runTelegramBatch(claimed) {
 }
 
 export async function runTranslationTick() {
-  // Claim a batch atomically so two overlapping ticks can't double-process the
-  // same rows — same conditional-UPDATE claim pattern used for ingestion.
-  const { rows: claimed } = await pool.query(
-    `UPDATE raw_items
-     SET status = 'translating', updated_at = now()
-     WHERE id IN (
-       SELECT id FROM raw_items
-       WHERE (status = 'new' OR (status = 'failed_translation' AND translation_attempts < $1))
-       ORDER BY id
-       LIMIT $2
-       FOR UPDATE SKIP LOCKED
-     )
-     RETURNING id, raw_text`,
-    [MAX_ATTEMPTS, BATCH_SIZE]
-  );
+  // Only items dedup has cleared: unique stories, and updates that carry new
+  // information. Duplicates never reach this stage ('legacy' = rows that were
+  // already past 'new' before dedup existed).
+  const claimed = await claimBatch({
+    eligibleSql: `(status = 'new' OR (status = 'failed_translation' AND translation_attempts < $1))
+                  AND dedup_status IN ('unique', 'update', 'legacy')`,
+    eligibleParams: [MAX_ATTEMPTS],
+    claimStatus: 'translating',
+    limit: BATCH_SIZE,
+    returning: 'id, raw_text, telegram_date',
+  });
 
   if (claimed.length === 0) return [];
 

@@ -35,8 +35,8 @@ test('translation tick never overwrites raw_text, even on failure', async () => 
   const originalText = 'اختبار حقيقي للنص الأصلي';
 
   const item = await pool.query(
-    `INSERT INTO raw_items (source_id, telegram_message_id, telegram_date, raw_text)
-     VALUES ($1, 1, now(), $2) RETURNING id`,
+    `INSERT INTO raw_items (source_id, telegram_message_id, telegram_date, raw_text, dedup_status)
+     VALUES ($1, 1, now(), $2, 'unique') RETURNING id`,
     [sourceId, originalText]
   );
 

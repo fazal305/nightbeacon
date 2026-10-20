@@ -6,6 +6,7 @@ const STATUS_LABEL = {
   tagging: 'Tagging',
   ready: 'Ready',
   failed_tagging: 'Tagging failed',
+  duplicate: 'Duplicate',
 };
 
 const STATUS_TONE = {
@@ -16,6 +17,7 @@ const STATUS_TONE = {
   tagging: 'text-priority-medium border-priority-medium',
   ready: 'text-status-good border-status-good',
   failed_tagging: 'text-priority-high border-priority-high',
+  duplicate: 'text-text-muted border-border',
 };
 
 export default function StatusBadge({ status }) {

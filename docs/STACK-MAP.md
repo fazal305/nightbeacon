@@ -14,7 +14,9 @@ impressive.
 | Node.js + Express | The only API surface the browser talks to. The browser never touches Postgres or Telegram directly. |
 | PostgreSQL (`pg`) | Relational persistence; constraints (not application code) enforce Telegram-message dedup. |
 | `telegram` (GramJS) | MTProto client for read-only Telegram polling — see `docs/SECURITY.md` for its maintenance-status risk note. |
-| `node-cron` | Scheduled polling/processing ticks inside the single Express process (see `docs/ARCHITECTURE.md` for why no separate worker yet). |
+| ~~`node-cron`~~ | Removed (Oct 2026): replaced by non-overlapping worker loops in `server/src/pipeline/workers.js` — see `docs/PIPELINE.md`. |
+| `pg_trgm` (Postgres contrib) | Fuzzy duplicate matching on normalized post text. |
+| Ollama (optional, external process) | Local multilingual embeddings for cross-language dedup; plain HTTP, no npm dependency. |
 | Groq (`openai/gpt-oss-20b` default) | Translation of non-English posts; the primary LLM provider — swapped in after OpenRouter's free tier turned out to cap at 50 req/day account-wide (not per-minute as first assumed), which a 400+ source backlog exhausted within minutes. Selected via `LLM_PROVIDER`, with OpenRouter kept as a configurable fallback (`server/src/processing/llmClient.js` — both are OpenAI-compatible chat-completions APIs, so switching providers is a config change, not a code change). |
 | `bcryptjs` | Password hashing for the single operator account. |
 | `express-session` + `connect-pg-simple` | httpOnly cookie sessions backed by Postgres, not a bare JWT. |

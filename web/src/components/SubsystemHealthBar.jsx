@@ -17,6 +17,7 @@ const STATUS_DOT = {
 
 const SUBSYSTEM_LABEL = {
   ingestion: 'Ingestion',
+  deduplication: 'Deduplication',
   translation: 'Translation',
   classification: 'Classification',
 };

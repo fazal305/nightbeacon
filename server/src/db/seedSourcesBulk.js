@@ -26,13 +26,21 @@ const RELIABILITY_NOTE =
 
 async function seed() {
   const client = await getTelegramClient();
-  const channels = new Map(); // username -> { title }
+  // The preview already carries each channel's id + access hash, so they're
+  // stored now and these sources never need contacts.ResolveUsername (the
+  // strictly rate-limited call behind the ~18h flood-wait in docs/POLLING.md).
+  const channels = new Map(); // username -> { title, channelId, accessHash }
 
   for (const slug of FOLDER_SLUGS) {
     const result = await client.invoke(new Api.chatlists.CheckChatlistInvite({ slug }));
     for (const chat of result.chats || []) {
       if (chat.username && !channels.has(chat.username)) {
-        channels.set(chat.username, { title: chat.title || chat.username });
+        const isChannel = chat.className === 'Channel' && chat.accessHash != null;
+        channels.set(chat.username, {
+          title: chat.title || chat.username,
+          channelId: isChannel ? chat.id.toString() : null,
+          accessHash: isChannel ? chat.accessHash.toString() : null,
+        });
       }
     }
   }
@@ -42,16 +50,25 @@ async function seed() {
   let inserted = 0;
   let skipped = 0;
 
-  for (const [username, { title }] of channels) {
+  for (const [username, { title, channelId, accessHash }] of channels) {
     const result = await pool.query(
-      `INSERT INTO sources (channel_username, display_name, reliability_note)
-       VALUES ($1, $2, $3)
+      `INSERT INTO sources (channel_username, display_name, reliability_note, telegram_channel_id, telegram_access_hash)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (channel_username) DO NOTHING
        RETURNING id`,
-      [username, title, RELIABILITY_NOTE]
+      [username, title, RELIABILITY_NOTE, channelId, accessHash]
     );
-    if (result.rows.length > 0) inserted++;
-    else skipped++;
+    if (result.rows.length > 0) {
+      inserted++;
+    } else {
+      skipped++;
+      // Backfill ids/hashes onto sources seeded before they were stored.
+      await pool.query(
+        `UPDATE sources SET telegram_channel_id = $2, telegram_access_hash = $3, updated_at = now()
+         WHERE channel_username = $1 AND telegram_access_hash IS NULL AND $3::bigint IS NOT NULL`,
+        [username, channelId, accessHash]
+      );
+    }
   }
 
   console.log(`Inserted ${inserted} new sources, skipped ${skipped} already-existing.`);

@@ -13,6 +13,7 @@ import { sourcesRouter } from './routes/sources.js';
 import { taxonomyRouter } from './routes/taxonomy.js';
 import { subsystemsRouter } from './routes/subsystems.js';
 import { activityRouter } from './routes/activity.js';
+import { pipelineRouter } from './routes/pipeline.js';
 import { requireAuth } from './middleware/requireAuth.js';
 
 const PgSession = connectPgSimple(session);
@@ -61,6 +62,7 @@ export function createApp() {
   app.use('/api/taxonomy', requireAuth, taxonomyRouter);
   app.use('/api/subsystems', requireAuth, subsystemsRouter);
   app.use('/api/activity', requireAuth, activityRouter);
+  app.use('/api/pipeline', requireAuth, pipelineRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });

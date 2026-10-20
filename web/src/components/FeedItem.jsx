@@ -20,6 +20,28 @@ function formatTimestamp(iso) {
   });
 }
 
+// Shown immediately, before dedup/translation finish: the post is visible as
+// soon as it's persisted, with its processing state spelled out rather than
+// hidden until it's "ready".
+function DedupBadge({ item }) {
+  const { t } = useTranslation();
+  const base = 'rounded border px-1.5 py-0.5 font-mono text-xs';
+  if (item.dedup_status === 'pending') {
+    return <span className={`${base} border-border text-text-muted`}>{t('feed.checkingDuplicates')}</span>;
+  }
+  if (item.dedup_status === 'update') {
+    return <span className={`${base} border-accent text-accent`}>{t('feed.storyUpdate')}</span>;
+  }
+  if (item.story_item_count > 1) {
+    return (
+      <span className={`${base} border-border text-text-muted`} title={t('feed.reportedByTitle')}>
+        {t('feed.reportedBy', { count: item.story_item_count })}
+      </span>
+    );
+  }
+  return null;
+}
+
 export default function FeedItem({ item }) {
   const { t } = useTranslation();
   return (
@@ -36,6 +58,7 @@ export default function FeedItem({ item }) {
           <span>#{item.telegram_message_id}</span>
         </div>
         <div className="flex items-center gap-1.5">
+          <DedupBadge item={item} />
           <CategoryBadge category={item.category} />
           <PriorityBadge priority={item.priority} />
           <StatusBadge status={item.status} />

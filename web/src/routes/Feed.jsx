@@ -15,7 +15,9 @@ export default function Feed() {
 
   const { data, isLoading, isError, dataUpdatedAt, refetch, isFetching } = useQuery({
     queryKey: ['items', filters],
-    queryFn: () => api.items(filters),
+    // Plain duplicates are collapsed into their story (shown once, with a
+    // source count) unless the analyst explicitly filters for them.
+    queryFn: () => api.items({ ...filters, collapse: filters.status === 'duplicate' ? undefined : 1 }),
     refetchInterval: online ? refreshIntervalMs : false,
   });
 

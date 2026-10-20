@@ -5,7 +5,12 @@ import { pool } from '../db/pool.js';
 // per-item results (each with an `outcome`, and optionally `error`); a
 // stage-level throw (e.g. the DB itself is unavailable) is also caught here
 // and recorded as a full failure rather than crashing the cron tick.
-export async function recordRun(subsystemName, fn) {
+//
+// Stages now run as continuous loops rather than once-a-minute cron ticks, so
+// an idle tick (nothing to do, no error) is only recorded when the caller
+// asks (`recordEmpty`) — roughly once a minute as a heartbeat — instead of
+// writing a row every second.
+export async function recordRun(subsystemName, fn, { recordEmpty = true } = {}) {
   const startedAt = new Date();
   let results = [];
   let stageError = null;
@@ -39,6 +44,8 @@ export async function recordRun(subsystemName, fn) {
   } else {
     status = 'success';
   }
+
+  if (!stageError && processedCount === 0 && !recordEmpty) return results;
 
   await pool.query(
     `INSERT INTO subsystem_status

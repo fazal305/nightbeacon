@@ -1,9 +1,11 @@
 # Polling Architecture
 
-Nightbeacon ingests public Telegram channels via **scheduled polling** (GramJS/MTProto,
-user session, read-only), not push updates or bot webhooks. This document is the
-single source of truth for why the polling design is correct under crashes,
-concurrency, and partial failure.
+Nightbeacon ingests public Telegram channels via **polling** (GramJS/MTProto,
+user session, read-only), plus push updates for any channel the account has
+joined. This document covers why the polling design is correct under crashes,
+concurrency, and partial failure. The scheduler, gap backfill, dedup stage and
+latency metrics are described in [`PIPELINE.md`](PIPELINE.md), which also
+records the October 2026 audit that replaced the cron-based poll pass.
 
 ## State
 
@@ -30,6 +32,10 @@ Each row in `sources` tracks polling state for one channel:
 3. **`last_seen_id` is computed as `MAX(telegram_message_id)` across the batch**,
    never "the last item returned by the API" — Telegram's ordering is not trusted.
    The update uses `GREATEST(last_seen_id, $maxId)` as an extra guard.
+   `getMessages` with `minId` returns the *newest* batch above `minId`, so when
+   a batch comes back full the skipped older range is recorded in
+   `ingestion_gaps` in the same transaction and backfilled later — before
+   this, those messages were silently lost (see `PIPELINE.md`).
 
 4. **Concurrency is prevented with a Postgres advisory lock**
    (`pg_try_advisory_lock`, keyed by a hash of the source's UUID), acquired before
@@ -38,21 +44,17 @@ Each row in `sources` tracks polling state for one channel:
    a database-level lock, so it stays correct if ingestion is later split into a
    separate worker process — no in-memory lock would survive that split safely.
 
-5. **A small inter-source delay** (`POLL_INTER_SOURCE_DELAY_MS`, default 750ms)
-   separates sequential per-source polls within a tick. With one source this
-   doesn't matter; once the source count grows into the hundreds (Nightbeacon
-   currently monitors 128 channels resolved from operator-provided Telegram
-   chat-folder invite links), firing that many `getMessages` calls back-to-
-   back on one MTProto connection risks Telegram's flood-wait rate limiting —
-   which would then penalize every source, not just the ones polled late in
-   the loop. The default poll schedule was widened from 2 to 5 minutes to
-   give a full cycle across all sources enough headroom
-   (`POLL_CRON_SCHEDULE`).
-6. **Retries happen on the next scheduled tick**, not an immediate in-process
-   retry loop. A failed poll increments `poll_error_count` and records
-   `last_error`; it does not hammer Telegram. (A cooldown/backoff after N
-   consecutive failures is a natural extension, not required for the single
-   Phase-1 channel.)
+5. **One shared request gate** (`POLL_INTER_SOURCE_DELAY_MS`, default 750ms)
+   spaces every ingestion request (polls and backfill) on the MTProto
+   connection, and pauses all of them during a flood-wait. A single
+   continuous scheduler picks the most overdue source each time, with
+   adaptive per-source intervals — the old 5-minute cron pass
+   (`POLL_CRON_SCHEDULE`, removed) took longer than its own interval at 424
+   sources and overlapped itself.
+6. **Retries are scheduled, never immediate.** A per-channel failure
+   increments `poll_error_count` and backs that channel off exponentially
+   (`next_poll_at`, 60s × 2ⁿ, max 1h). Flood-waits and connectivity failures
+   pause ingestion globally instead and don't count against the channel.
 
 ## Failure scenarios
 
@@ -92,11 +94,11 @@ seconds is required (caused by contacts.ResolveUsername)` — ~18 hours) on
    already polling — the throttling is designed around one active poller,
    not two running concurrently.
 
-No code changes were needed for this specific incident — it resolves on its
-own once the wait period elapses, and already-resolved sources are
-unaffected (GramJS's entity cache survives). If Nightbeacon grows well
-beyond ~450 sources, revisit whether `ResolveUsername` calls need their own,
-separate, more conservative pacing from `getMessages` calls.
+**Correction (Oct 2026 audit):** GramJS's entity cache does *not* survive a
+process restart with a `StringSession`, so every restart re-resolved every
+username. Channel ids and access hashes are now persisted on `sources`, and
+the rare `ResolveUsername` that is still needed has its own slower gate
+(`TELEGRAM_RESOLVE_INTERVAL_MS`). See `PIPELINE.md`.
 
 ## Source curation: removing redundant/relay channels
 
@@ -135,9 +137,11 @@ if the process crashes or restarts mid-claim. Fixed via
 
 ## Backfill
 
-Not automated. A historical backfill is a manual, explicit operation (passing a
-specific `minId`/`maxId` range) — never triggered automatically, since it could
-pull unbounded volume without operator intent.
+Only *gaps* are backfilled automatically: id ranges the live poller knows it
+skipped because a channel posted more than one batch between polls
+(`ingestion_gaps`). These are bounded by construction. Pulling a channel's
+older history (before it was first tracked) remains a manual, explicit
+operation — it could pull unbounded volume without operator intent.
 
 ## Deleted messages
 

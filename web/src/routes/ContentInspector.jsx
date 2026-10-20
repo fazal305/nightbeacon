@@ -4,6 +4,53 @@ import { api, ApiError } from '../lib/api';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge, { CategoryBadge } from '../components/PriorityBadge';
 
+const DEDUP_LABEL = {
+  unique: 'First report',
+  duplicate: 'Duplicate',
+  update: 'Update (new details)',
+  legacy: '—',
+  pending: 'Checking duplicates',
+};
+
+// Every channel that carried this story, in Telegram time order — dedup
+// attaches reports to a story but never discards their provenance.
+function StorySection({ data }) {
+  const story = data.story;
+  if (!story || story.reports.length < 2) return null;
+  return (
+    <section className="mb-4 rounded border border-border bg-panel p-4">
+      <h2 className="mb-2 font-mono text-xs uppercase tracking-wide text-text-muted">
+        Story reported by {story.item_count} source{story.item_count === 1 ? '' : 's'}
+        {story.update_count > 0 && ` · ${story.update_count} update${story.update_count === 1 ? '' : 's'}`}
+      </h2>
+      <ul className="space-y-1 text-sm">
+        {story.reports.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-center gap-2 font-mono text-xs text-text-muted">
+            <span>{new Date(r.telegram_date).toLocaleString()}</span>
+            {r.id === data.id ? (
+              <span className="text-text">@{r.channel_username} (this post)</span>
+            ) : (
+              <Link to={`/content/${r.id}`} className="text-accent hover:underline">
+                @{r.channel_username}
+              </Link>
+            )}
+            <span>{DEDUP_LABEL[r.dedup_status] || r.dedup_status}</span>
+            {r.dedup_method && (
+              <span>
+                via {r.dedup_method}
+                {r.dedup_score != null && ` (${Number(r.dedup_score).toFixed(2)})`}
+              </span>
+            )}
+            <a href={r.message_url} target="_blank" rel="noreferrer noopener" className="hover:underline">
+              t.me ↗
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function TranslationSection({ data }) {
   if (!data.translation_status || data.translation_status === 'pending') {
     return (
@@ -151,6 +198,12 @@ export default function ContentInspector() {
         <dd className="text-right text-text">{new Date(data.collected_at).toLocaleString()}</dd>
         <dt>Has media</dt>
         <dd className="text-right text-text">{data.has_media ? 'Yes' : 'No'}</dd>
+        <dt>Original post</dt>
+        <dd className="text-right text-text">
+          <a href={data.message_url} target="_blank" rel="noreferrer noopener" className="text-accent hover:underline">
+            {data.message_url}
+          </a>
+        </dd>
       </dl>
 
       <section className="mb-4 rounded border border-border bg-panel p-4">
@@ -161,6 +214,8 @@ export default function ContentInspector() {
           {data.raw_text || <span className="italic text-text-muted">No text (media-only post)</span>}
         </p>
       </section>
+
+      <StorySection data={data} />
 
       <TranslationSection data={data} />
 

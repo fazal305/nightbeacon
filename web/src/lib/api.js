@@ -53,6 +53,7 @@ export const api = {
   source: (id) => request(`/sources/${id}`),
   taxonomy: () => request('/taxonomy'),
   subsystems: () => request('/subsystems'),
+  pipelineMetrics: () => request('/pipeline/metrics'),
   activity: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))

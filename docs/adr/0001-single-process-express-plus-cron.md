@@ -6,6 +6,8 @@
 classification) need scheduled execution. A separate worker process is the
 conventional "production" answer.
 
+**Update (Oct 2026):** still a single process, but the cron jobs became continuous, non-overlapping worker loops — see `docs/PIPELINE.md`.
+
 **Decision:** Run `node-cron` jobs inside the same Express process that
 serves the API, for v1.
 

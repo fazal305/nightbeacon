@@ -6,6 +6,7 @@ import { useOnlineStatus } from '../lib/useOnlineStatus';
 import { useElapsedSeconds } from '../lib/useElapsedSeconds';
 import FeedItem from '../components/FeedItem';
 import SubsystemHealthBar from '../components/SubsystemHealthBar';
+import PipelinePanel from '../components/PipelinePanel';
 
 const REFRESH_INTERVAL_MS = 15_000; // faster than Dashboard's configurable interval —
 // Live Monitor is the "watch this closely" view; Dashboard is the filterable
@@ -34,7 +35,7 @@ export default function LiveMonitor() {
 
   const { data, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ['live-monitor', priority],
-    queryFn: () => api.items({ priority, limit: LIMIT }),
+    queryFn: () => api.items({ priority, limit: LIMIT, collapse: 1 }),
     refetchInterval: online ? REFRESH_INTERVAL_MS : false,
   });
 
@@ -91,6 +92,7 @@ export default function LiveMonitor() {
       </div>
 
       <SubsystemHealthBar />
+      <PipelinePanel />
 
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-panel px-4 py-3">
         <span className="text-xs text-text-muted">{t('live.priorityLabel')}</span>

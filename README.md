@@ -35,7 +35,13 @@ this required.
 
 ## Features
 
-- Scheduled, deduplicated Telegram channel polling (GramJS/MTProto)
+- Adaptive, flood-wait-aware Telegram polling (GramJS/MTProto) with gap
+  backfill and push updates for joined channels — see [`docs/PIPELINE.md`](docs/PIPELINE.md)
+- Duplicate detection **before** translation: exact, fuzzy, and optional
+  cross-language semantic matching (local multilingual embeddings) groups
+  relays into stories; reports with new figures are kept as story updates
+- Per-stage latency, queue depth and ingestion health metrics
+  (`/api/pipeline/metrics`, Live Monitor's Pipeline panel)
 - Crash-safe ingestion — see [`docs/POLLING.md`](docs/POLLING.md)
 - Session-authenticated single-operator dashboard
 - Real-time-refreshing feed with source/status filtering
@@ -84,7 +90,7 @@ processing lifecycle state machine).
 See [`docs/STACK-MAP.md`](docs/STACK-MAP.md) for why each dependency exists.
 
 React · Vite · Tailwind CSS · TanStack Query · Zustand · React Router ·
-react-i18next · Node.js · Express · PostgreSQL · GramJS · node-cron ·
+react-i18next · Node.js · Express · PostgreSQL (+ pg_trgm) · GramJS ·
 Groq / OpenRouter
 
 ## Project structure
