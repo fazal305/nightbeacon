@@ -1,5 +1,5 @@
 import { recordRun } from '../subsystems/recordRun.js';
-import { getTelegramClient, requestGate } from './telegramClient.js';
+import { onTelegramClient, requestGate } from './telegramClient.js';
 import { nextDueSource, pollSource } from './pollSource.js';
 import { runBackfillStep } from './backfill.js';
 import { startLiveUpdates } from './liveUpdates.js';
@@ -48,26 +48,14 @@ export function startIngestionScheduler() {
     if (batch.length > 0) console.log(`[ingestion] last minute: ${batch.length} poll(s), ${inserted} new item(s)`);
   }
 
-  let liveStarted = false;
-  let lastLiveAttempt = 0;
-  async function ensureLiveUpdates() {
-    if (liveStarted || Date.now() - lastLiveAttempt < FLUSH_MS) return;
-    lastLiveAttempt = Date.now();
-    try {
-      await startLiveUpdates(await getTelegramClient());
-      liveStarted = true;
-    } catch (err) {
-      // Not fatal: polling carries on (and retries the connection itself);
-      // this is retried every minute, so push updates start once Telegram
-      // is reachable even if it wasn't at boot.
-      console.error('[ingestion] Telegram connect / live updates unavailable:', err.message);
-    }
-  }
+  // Live updates are registered on whichever client is active — at first
+  // connect, and again after every proxy failover (the old client's handlers
+  // die with it). The connection itself is opened by the first poll.
+  onTelegramClient((client) => startLiveUpdates(client));
 
   (async () => {
     for (;;) {
       try {
-        await ensureLiveUpdates();
         await flush(false);
         if (requestGate.isPaused()) {
           await sleep(Math.min(5000, requestGate.pausedUntil - Date.now()));

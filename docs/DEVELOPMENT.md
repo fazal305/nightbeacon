@@ -53,12 +53,42 @@ domain). GramJS itself has no Fake-TLS support, so `ee` secrets go through
 Nightbeacon's own transport (`server/src/ingestion/fakeTlsConnection.js`).
 Hex and base64 secrets are both accepted.
 
-Check the proxy before logging in or deploying — no login needed, it does a
-real MTProto key exchange and one request through the proxy:
+### Several proxies with automatic failover
+
+Free/public MTProxies die often, so you can give Nightbeacon a whole list.
+Put the share links (`https://t.me/proxy?…`, `tg://proxy?…`, `https://t.me/socks?…`)
+in `server/.env`, comma-separated:
 
 ```bash
-cd server && npm run telegram:check-proxy
+TELEGRAM_PROXY_LINKS=https://t.me/proxy?server=…&port=443&secret=ee…,https://t.me/proxy?server=…
 ```
+
+or one per line in a file (`#` comments allowed; `proxies.txt` is gitignored):
+
+```bash
+TELEGRAM_PROXY_LINKS_FILE=proxies.txt
+```
+
+Routes are tried in order at startup; the first one that completes a real
+Telegram request is used. If `TELEGRAM_PROXY_FAILOVER_AFTER` (3) requests in
+a row get no answer, Nightbeacon drops that route and moves to the next.
+Every Telegram request has a timeout (`TELEGRAM_REQUEST_TIMEOUT_MS`), so a
+dead proxy can't freeze polling. The active route and the failover count
+are shown in Live Monitor's Pipeline panel.
+
+### Test the routes
+
+No login needed — for each route it does a real MTProto key exchange and
+one request, 6 routes at a time:
+
+```bash
+cd server
+npm run telegram:check-proxy                     # routes from .env
+npm run telegram:check-proxy -- proxies.txt      # or a file of links
+```
+
+It prints the working routes fastest first and a ready-to-paste
+`TELEGRAM_PROXY_LINKS=` line.
 
 Fake-TLS proxies reject handshakes whose timestamp is more than a few
 seconds off, so keep the server clock synced (NTP — on by default on GCP

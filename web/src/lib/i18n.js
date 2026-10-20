@@ -56,6 +56,8 @@ const resources = {
         throughput: 'Per minute (15m): {{ingested}} in · {{deduped}} deduped · {{translated}} translated · {{ready}} ready',
         ingestion: 'Ingestion: {{due}}/{{enabled}} sources due · max overdue {{overdue}} · last fetch {{lastFetch}} · reconnects {{reconnects}} · open gaps {{gaps}}',
         floodWait: 'Telegram flood-wait active until {{until}}',
+        route: 'Telegram route: {{route}} · proxy failovers since start: {{failovers}}',
+        notConnected: 'not connected',
         duplicatesLastHour: 'Dedup (last hour): {{unique}} unique · {{duplicate}} duplicates · {{update}} updates',
       },
       filters: {
@@ -134,6 +136,8 @@ const resources = {
         throughput: 'في الدقيقة (15د): {{ingested}} وارد · {{deduped}} مفحوص · {{translated}} مترجم · {{ready}} جاهز',
         ingestion: 'الاستيعاب: {{due}}/{{enabled}} مصدر مستحق · أقصى تأخير {{overdue}} · آخر جلب {{lastFetch}} · إعادة اتصال {{reconnects}} · فجوات مفتوحة {{gaps}}',
         floodWait: 'حظر مؤقت من تيليجرام حتى {{until}}',
+        route: 'مسار تيليجرام: {{route}} · تبديلات الوكيل منذ البدء: {{failovers}}',
+        notConnected: 'غير متصل',
         duplicatesLastHour: 'التكرار (آخر ساعة): {{unique}} فريد · {{duplicate}} مكرر · {{update}} تحديث',
       },
       filters: {

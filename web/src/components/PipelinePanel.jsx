@@ -84,6 +84,12 @@ export default function PipelinePanel() {
           })}
         </div>
         <div>
+          {t('pipeline.route', {
+            route: tg.activeRoute || t('pipeline.notConnected'),
+            failovers: tg.failovers || 0,
+          })}
+        </div>
+        <div>
           {t('pipeline.ingestion', {
             due: ingestion.sources.due,
             enabled: ingestion.sources.enabled,

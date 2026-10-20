@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 // Optional proxy for reaching Telegram's MTProto servers from a network where
 // Telegram is blocked/restricted. Configured entirely via env vars — never
 // hardcoded, since proxy credentials are as sensitive as any other secret.
@@ -6,6 +8,14 @@
 //   SOCKS4/5:  TELEGRAM_PROXY_IP, TELEGRAM_PROXY_PORT, TELEGRAM_PROXY_SOCKS_TYPE (4|5, default 5),
 //              optionally TELEGRAM_PROXY_USERNAME / TELEGRAM_PROXY_PASSWORD
 //   MTProxy:   TELEGRAM_PROXY_IP, TELEGRAM_PROXY_PORT, TELEGRAM_PROXY_SECRET
+//
+// Several routes can be configured at once, tried in order with automatic
+// failover (see telegramClient.js) — free/public MTProxies come and go:
+//   TELEGRAM_PROXY_LINKS       t.me/proxy, tg://proxy or t.me/socks links,
+//                              separated by spaces, commas or newlines
+//   TELEGRAM_PROXY_LINKS_FILE  path to a text file of such links (one per line,
+//                              # comments allowed), relative to the working dir
+// The single-proxy vars above, if set, are tried first.
 //
 // MTProxy secret formats:
 //   - 32 hex chars (plain) and "dd" + 32 hex chars (padded) are handled by
@@ -78,4 +88,74 @@ export function describeProxy(proxy) {
       ? 'MTProxy'
       : `SOCKS${proxy.socksType}`;
   return `${kind} ${proxy.ip}:${proxy.port}`;
+}
+
+// Parses a Telegram proxy share link into a proxy config (with the original
+// link kept, so working ones can be printed back for .env).
+//   https://t.me/proxy?server=…&port=…&secret=…   (also tg://proxy?…)
+//   https://t.me/socks?server=…&port=…[&user=…&pass=…]   (also tg://socks?…)
+export function parseProxyLink(link) {
+  let url;
+  try {
+    url = new URL(link.trim());
+  } catch {
+    throw new Error('not a URL');
+  }
+  const kind = url.protocol === 'tg:' ? url.hostname : url.pathname.replace(/^\//, '');
+  const q = url.searchParams;
+  const env =
+    kind === 'socks'
+      ? {
+          TELEGRAM_PROXY_IP: q.get('server'),
+          TELEGRAM_PROXY_PORT: q.get('port'),
+          TELEGRAM_PROXY_USERNAME: q.get('user') || '',
+          TELEGRAM_PROXY_PASSWORD: q.get('pass') || '',
+        }
+      : kind === 'proxy'
+        ? { TELEGRAM_PROXY_IP: q.get('server'), TELEGRAM_PROXY_PORT: q.get('port'), TELEGRAM_PROXY_SECRET: q.get('secret') }
+        : null;
+  if (!env) throw new Error('not a t.me/proxy, tg://proxy or t.me/socks link');
+  if (!env.TELEGRAM_PROXY_IP || !env.TELEGRAM_PROXY_PORT) throw new Error('link has no server/port');
+  if (kind === 'proxy' && !env.TELEGRAM_PROXY_SECRET) throw new Error('MTProxy link has no secret');
+  return { ...buildProxyConfig(env), link: link.trim() };
+}
+
+export function splitProxyLinks(text) {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, ''))
+    .join(' ')
+    .split(/[\s,]+/)
+    .filter(Boolean);
+}
+
+// All configured routes, in the order to try them. `undefined` stands for a
+// direct connection (only when nothing is configured). Invalid entries are
+// reported and skipped rather than failing startup — one bad link in a long
+// list shouldn't stop the others from being used.
+export function buildProxyCandidates(env = process.env, { readFile = (f) => fs.readFileSync(f, 'utf8'), warn = console.warn } = {}) {
+  const candidates = [];
+  const single = buildProxyConfig(env);
+  if (single) candidates.push(single);
+
+  const links = splitProxyLinks(env.TELEGRAM_PROXY_LINKS);
+  if (env.TELEGRAM_PROXY_LINKS_FILE) links.push(...splitProxyLinks(readFile(env.TELEGRAM_PROXY_LINKS_FILE)));
+
+  const seen = new Set(candidates.map(routeKey));
+  for (const link of links) {
+    try {
+      const proxy = parseProxyLink(link);
+      const key = routeKey(proxy);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(proxy);
+    } catch (err) {
+      warn(`[telegram] skipping proxy link (${err.message}): ${link.slice(0, 60)}`);
+    }
+  }
+  return candidates.length > 0 ? candidates : [undefined];
+}
+
+function routeKey(p) {
+  return `${p.ip}:${p.port}:${p.secret || ''}:${p.fakeTlsDomain || ''}:${p.username || ''}`;
 }

@@ -1,9 +1,10 @@
 import { Api, TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
+import { Logger, LogLevel } from 'telegram/extensions/Logger.js';
 import { UpdateConnectionState } from 'telegram/network/index.js';
 import { returnBigInt } from 'telegram/Helpers.js';
 import { pool } from '../db/pool.js';
-import { buildProxyConfig, describeProxy } from './proxyConfig.js';
+import { buildProxyCandidates, describeProxy } from './proxyConfig.js';
 import { applyProxyTransport } from './fakeTlsConnection.js';
 import { RateGate } from '../pipeline/rateGate.js';
 
@@ -13,6 +14,8 @@ let connecting = null;
 // Process-wide Telegram health counters, exposed by GET /api/pipeline/metrics.
 export const telegramStats = {
   connected: false,
+  activeRoute: null,
+  failovers: 0,
   connects: 0,
   reconnects: 0,
   disconnects: 0,
@@ -37,13 +40,99 @@ export const requestGate = new RateGate(Number(process.env.POLL_INTER_SOURCE_DEL
 // only runs once per source, ever.
 export const resolveGate = new RateGate(Number(process.env.TELEGRAM_RESOLVE_INTERVAL_MS || 15000));
 
+const CONNECT_TIMEOUT_MS = Number(process.env.TELEGRAM_CONNECT_TIMEOUT_MS || 20000);
+export const REQUEST_TIMEOUT_MS = Number(process.env.TELEGRAM_REQUEST_TIMEOUT_MS || 60000);
+// Consecutive connectivity failures (no answer at all — not Telegram errors)
+// before the current route is abandoned for the next configured one.
+const FAILOVER_AFTER = Number(process.env.TELEGRAM_PROXY_FAILOVER_AFTER || 3);
+
+export function withTimeout(promise, ms, what) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Telegram did not answer within ${ms / 1000}s (${what})`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+// Telegram RPC errors (AUTH_KEY_UNREGISTERED, FLOOD_WAIT, …) mean the route
+// works — Telegram answered. Anything else means it didn't.
+export function isTelegramAnswer(err) {
+  return Boolean(err && (err.code || err.errorMessage || typeof err.seconds === 'number'));
+}
+
+let candidates = null;
+let candidateIndex = 0;
+let consecutiveConnectivityFailures = 0;
+const clientHooks = [];
+
+function routes() {
+  if (!candidates) candidates = buildProxyCandidates();
+  return candidates;
+}
+
+// Connects through one route and proves it with a real request: GramJS's
+// connect() can give up without throwing, so "connected" alone isn't trusted.
+async function defaultConnectRoute(proxy, { apiId, apiHash, sessionString, multipleRoutes }) {
+  const c = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
+    // With several routes, fail fast and move on; with one, keep retrying it.
+    connectionRetries: multipleRoutes ? 1 : Number(process.env.TELEGRAM_CONNECTION_RETRIES || 10),
+    retryDelay: 2000,
+    autoReconnect: true,
+    // GramJS silently sleeps (blocking the caller) on flood-waits up to this
+    // many seconds. Kept short so longer waits surface as errors and pause
+    // the shared requestGate instead of stalling one request invisibly.
+    floodSleepThreshold: Number(process.env.TELEGRAM_FLOOD_SLEEP_THRESHOLD || 10),
+    proxy,
+    // Route attempts are summarised by our own log lines; GramJS's per-attempt
+    // stack traces would bury them when cycling through a long proxy list.
+    baseLogger: new Logger(multipleRoutes ? LogLevel.ERROR : LogLevel.WARN),
+  });
+  applyProxyTransport(c, proxy);
+  try {
+    await withTimeout(c.connect(), CONNECT_TIMEOUT_MS, 'connect');
+    try {
+      await withTimeout(c.invoke(new Api.help.GetNearestDc()), CONNECT_TIMEOUT_MS, 'first request');
+    } catch (err) {
+      if (!isTelegramAnswer(err)) throw err;
+    }
+    return c;
+  } catch (err) {
+    c.destroy().catch(() => {});
+    throw err;
+  }
+}
+
+let connectRoute = defaultConnectRoute;
+
+function trackConnectionState(c) {
+  c.addEventHandler((update) => {
+    if (!(update instanceof UpdateConnectionState) || c !== client) return;
+    telegramStats.lastStateChangeAt = new Date().toISOString();
+    if (update.state === UpdateConnectionState.connected) {
+      telegramStats.reconnects++;
+      telegramStats.connected = true;
+    } else {
+      if (telegramStats.connected) telegramStats.disconnects++;
+      telegramStats.connected = false;
+    }
+  });
+}
+
+// Called with every client that becomes active (now, and after each
+// failover), e.g. to register live-update handlers on it.
+export function onTelegramClient(cb) {
+  clientHooks.push(cb);
+  if (client) Promise.resolve(cb(client)).catch((err) => console.error('[telegram] client hook failed:', err.message));
+}
+
 // A single long-lived MTProto client for the whole process — GramJS expects
 // one persistent connection, not one per request/poll.
 //
 // Concurrent callers share one in-flight connect, and a failed connect is not
-// cached: previously the client was stored before connect() resolved, so one
-// failed connect (common on a blocked network) left every later poll using a
-// disconnected client until the process was restarted.
+// cached (previously one failed connect left a dead client in place until a
+// restart). Routes are tried in order starting from the last one that worked.
 export async function getTelegramClient() {
   if (client) return client;
   if (connecting) return connecting;
@@ -60,37 +149,36 @@ export async function getTelegramClient() {
       );
     }
 
-    const proxy = buildProxyConfig();
-    const c = new TelegramClient(new StringSession(sessionString), apiId, apiHash, {
-      connectionRetries: Number(process.env.TELEGRAM_CONNECTION_RETRIES || 10),
-      retryDelay: 2000,
-      autoReconnect: true,
-      // GramJS silently sleeps (blocking the caller) on flood-waits up to this
-      // many seconds. Kept short so longer waits surface as errors and pause
-      // the shared requestGate instead of stalling one request invisibly.
-      floodSleepThreshold: Number(process.env.TELEGRAM_FLOOD_SLEEP_THRESHOLD || 10),
-      proxy,
-    });
-    applyProxyTransport(c, proxy);
-    if (proxy) console.log(`[telegram] connecting via ${describeProxy(proxy)}`);
-
-    c.addEventHandler((update) => {
-      if (!(update instanceof UpdateConnectionState)) return;
-      telegramStats.lastStateChangeAt = new Date().toISOString();
-      if (update.state === UpdateConnectionState.connected) {
-        if (telegramStats.connects > 0) telegramStats.reconnects++;
-        telegramStats.connects++;
+    const list = routes();
+    const failures = [];
+    for (let i = 0; i < list.length; i++) {
+      const idx = (candidateIndex + i) % list.length;
+      const proxy = list[idx];
+      const label = describeProxy(proxy);
+      const started = Date.now();
+      try {
+        const c = await connectRoute(proxy, { apiId, apiHash, sessionString, multipleRoutes: list.length > 1 });
+        candidateIndex = idx;
+        consecutiveConnectivityFailures = 0;
+        client = c;
+        trackConnectionState(c);
         telegramStats.connected = true;
-      } else {
-        if (telegramStats.connected) telegramStats.disconnects++;
-        telegramStats.connected = false;
+        telegramStats.connects++;
+        telegramStats.activeRoute = label;
+        telegramStats.lastStateChangeAt = new Date().toISOString();
+        console.log(`[telegram] connected via ${label} in ${Date.now() - started} ms`);
+        for (const cb of clientHooks) {
+          Promise.resolve(cb(c)).catch((err) => console.error('[telegram] client hook failed:', err.message));
+        }
+        return c;
+      } catch (err) {
+        failures.push(`${label}: ${err.message}`);
+        console.warn(`[telegram] route ${idx + 1}/${list.length} failed — ${label}: ${err.message}`);
       }
-    });
-
-    await c.connect();
-    telegramStats.connected = true;
-    client = c;
-    return c;
+    }
+    // Next attempt starts from the route after the first one tried.
+    candidateIndex = (candidateIndex + 1) % list.length;
+    throw new Error(`Could not reach Telegram via any of ${list.length} configured route(s). ${failures.slice(0, 3).join(' | ')}`);
   })();
 
   try {
@@ -98,6 +186,37 @@ export async function getTelegramClient() {
   } finally {
     connecting = null;
   }
+}
+
+export function reportTelegramSuccess() {
+  consecutiveConnectivityFailures = 0;
+}
+
+// Called when a request got no answer at all. After FAILOVER_AFTER in a row
+// the current client is dropped; the next getTelegramClient() moves on to the
+// next configured route (or reconnects, if there is only one).
+export function reportConnectivityFailure() {
+  consecutiveConnectivityFailures++;
+  if (!client || consecutiveConnectivityFailures < FAILOVER_AFTER) return;
+  const dead = client;
+  const label = telegramStats.activeRoute;
+  client = null;
+  consecutiveConnectivityFailures = 0;
+  candidateIndex = (candidateIndex + 1) % routes().length;
+  telegramStats.failovers = (telegramStats.failovers || 0) + 1;
+  telegramStats.connected = false;
+  telegramStats.activeRoute = null;
+  console.warn(`[telegram] ${FAILOVER_AFTER} requests in a row got no answer via ${label} — switching route`);
+  dead.destroy().catch(() => {});
+}
+
+export function _setConnectRouteForTests(fn, routeList) {
+  connectRoute = fn || defaultConnectRoute;
+  candidates = routeList ?? null;
+  candidateIndex = 0;
+  consecutiveConnectivityFailures = 0;
+  client = null;
+  clientHooks.length = 0;
 }
 
 export function floodWaitSeconds(err) {
@@ -144,7 +263,7 @@ export async function resolveSourcePeer(tgClient, source) {
   telegramStats.resolves++;
   let peer;
   try {
-    peer = await tgClient.getInputEntity(source.channel_username);
+    peer = await withTimeout(tgClient.getInputEntity(source.channel_username), REQUEST_TIMEOUT_MS, 'resolve username');
   } catch (err) {
     handleFloodWait(err, 'resolve');
     throw err;

@@ -10,3 +10,6 @@ web/dist/
 server/dist/
 .pgdata/
 .pgtools/
+
+# Local proxy link lists (TELEGRAM_PROXY_LINKS_FILE)
+proxies.txt

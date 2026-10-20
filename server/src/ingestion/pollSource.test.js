@@ -7,6 +7,7 @@ import { pool } from '../db/pool.js';
 // the dynamic imports below so the shared request gate picks it up.
 process.env.POLL_INTER_SOURCE_DELAY_MS = '0';
 process.env.TELEGRAM_RESOLVE_INTERVAL_MS = '0';
+process.env.TELEGRAM_REQUEST_TIMEOUT_MS = '300';
 const { pollSource, nextIntervalSeconds, POLL_BATCH_LIMIT } = await import('./pollSource.js');
 const { runBackfillStep } = await import('./backfill.js');
 const { requestGate } = await import('./telegramClient.js');
@@ -215,6 +216,16 @@ test('poll: a connectivity failure (proxy/network down) pauses ingestion globall
   );
   assert.equal(rows[0].poll_error_count, 0);
   assert.equal(rows[0].still_due, true);
+  requestGate.pausedUntil = 0;
+  await dropSource(source.id);
+});
+
+test('poll: a request that never returns (dead proxy) times out instead of freezing ingestion', async () => {
+  const source = await makeSource({ lastSeen: 5 });
+  const tg = { getMessages: () => new Promise(() => {}), getInputEntity: async () => null };
+  await assert.rejects(pollSource(source, { tgClient: tg }), /did not answer/);
+  const { rows } = await pool.query('SELECT poll_error_count FROM sources WHERE id = $1', [source.id]);
+  assert.equal(rows[0].poll_error_count, 0, 'connectivity, not the channel\'s fault');
   requestGate.pausedUntil = 0;
   await dropSource(source.id);
 });

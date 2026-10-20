@@ -6,6 +6,11 @@ import {
   forgetSourcePeer,
   handleFloodWait,
   isStalePeerError,
+  withTimeout,
+  REQUEST_TIMEOUT_MS,
+  reportTelegramSuccess,
+  reportConnectivityFailure,
+  isTelegramAnswer,
 } from './telegramClient.js';
 
 export const POLL_BATCH_LIMIT = Number(process.env.POLL_BATCH_LIMIT || 100);
@@ -92,8 +97,13 @@ export async function fetchHistory(tgClient, source, params) {
   const peer = await resolveSourcePeer(tgClient, source);
   await requestGate.wait();
   try {
-    return await tgClient.getMessages(peer, params);
+    // A dead proxy can leave GramJS waiting forever; without a timeout one
+    // stuck request would stall the whole (sequential) ingestion loop.
+    const messages = await withTimeout(tgClient.getMessages(peer, params), REQUEST_TIMEOUT_MS, 'getMessages');
+    reportTelegramSuccess();
+    return messages;
   } catch (err) {
+    if (isTelegramAnswer(err)) reportTelegramSuccess();
     handleFloodWait(err, 'history');
     if (isStalePeerError(err) && source.telegram_access_hash != null) await forgetSourcePeer(source.id);
     throw err;
@@ -186,7 +196,7 @@ const CONNECTIVITY_PAUSE_MS = Number(process.env.TELEGRAM_CONNECTIVITY_PAUSE_MS 
 // proxy down, socket timeout — means we never got an answer about this
 // channel at all.
 export function isConnectivityError(err) {
-  return !(err && (err.code || err.errorMessage || typeof err.seconds === 'number'));
+  return !isTelegramAnswer(err);
 }
 
 async function recordPollFailure(source, err) {
@@ -198,7 +208,10 @@ async function recordPollFailure(source, err) {
   // the channel's error backoff untouched.
   const flood = err && typeof err.seconds === 'number' ? err.seconds : null;
   const connectivity = flood == null && isConnectivityError(err);
-  if (connectivity) requestGate.pauseFor(CONNECTIVITY_PAUSE_MS);
+  if (connectivity) {
+    requestGate.pauseFor(CONNECTIVITY_PAUSE_MS);
+    reportConnectivityFailure();
+  }
   const delay = flood ?? (connectivity ? 0 : errorBackoffSeconds((source.poll_error_count || 0) + 1));
   await pool.query(
     `UPDATE sources
