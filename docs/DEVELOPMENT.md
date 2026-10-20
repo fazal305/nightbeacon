@@ -40,6 +40,31 @@ TELEGRAM_PROXY_SOCKS_TYPE=5
 or an MTProxy (`TELEGRAM_PROXY_SECRET` instead of a SOCKS type). Leave all
 `TELEGRAM_PROXY_*` vars empty to connect directly, no proxy.
 
+```bash
+# MTProxy — copy server/port/secret from the tg://proxy?server=…&port=…&secret=… link
+TELEGRAM_PROXY_IP=proxy.example.com
+TELEGRAM_PROXY_PORT=443
+TELEGRAM_PROXY_SECRET=ee0123456789abcdef0123456789abcdef7777772e676f6f676c652e636f6d
+```
+
+All three MTProxy secret types work: plain (32 hex), `dd…` (padded) and
+`ee…` (Fake-TLS — the hex after the first 32 key characters is the disguise
+domain). GramJS itself has no Fake-TLS support, so `ee` secrets go through
+Nightbeacon's own transport (`server/src/ingestion/fakeTlsConnection.js`).
+Hex and base64 secrets are both accepted.
+
+Check the proxy before logging in or deploying — no login needed, it does a
+real MTProto key exchange and one request through the proxy:
+
+```bash
+cd server && npm run telegram:check-proxy
+```
+
+Fake-TLS proxies reject handshakes whose timestamp is more than a few
+seconds off, so keep the server clock synced (NTP — on by default on GCP
+VMs). A "proxy closed the connection during the TLS handshake" error almost
+always means a wrong secret or a skewed clock.
+
 ## Telegram session (one-time, interactive)
 
 ```bash

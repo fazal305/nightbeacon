@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildProxyConfig, normalizeMtproxySecret, describeProxy } from './proxyConfig.js';
+import { buildProxyConfig, normalizeMtproxySecret, parseMtproxySecret, describeProxy } from './proxyConfig.js';
 
 const HEX16 = '0123456789abcdef0123456789abcdef';
 
@@ -27,9 +27,18 @@ test('MTProxy base64url secret is converted to hex', () => {
   assert.equal(normalizeMtproxySecret(b64), HEX16);
 });
 
-test('Fake-TLS (ee) secrets are rejected at startup with an actionable message', () => {
+test('Fake-TLS (ee) secrets: key and SNI domain are split out, hex or base64', () => {
   const ee = `ee${HEX16}${Buffer.from('www.google.com').toString('hex')}`;
-  assert.throws(() => normalizeMtproxySecret(ee), /Fake-TLS/);
+  const p = buildProxyConfig({ TELEGRAM_PROXY_IP: 'p.example', TELEGRAM_PROXY_PORT: '443', TELEGRAM_PROXY_SECRET: ee });
+  assert.equal(p.secret, HEX16);
+  assert.equal(p.fakeTlsDomain, 'www.google.com');
+  assert.equal(p.MTProxy, true);
+  assert.equal(describeProxy(p), 'MTProxy (Fake-TLS, SNI www.google.com) p.example:443');
+  assert.deepEqual(parseMtproxySecret(Buffer.from(ee, 'hex').toString('base64url')), parseMtproxySecret(ee));
+});
+
+test('Fake-TLS secret with a garbage domain part is rejected', () => {
+  assert.throws(() => parseMtproxySecret(`ee${HEX16}00ff10`), /not a hostname/);
 });
 
 test('invalid port rejected', () => {

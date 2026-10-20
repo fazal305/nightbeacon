@@ -148,6 +148,43 @@ OLLAMA_URL=http://127.0.0.1:11434
 invalidates stored story embeddings for semantic matching (they are keyed by
 `embedding_model`); exact and fuzzy matching are unaffected.
 
+## Telegram access through a Fake-TLS MTProxy
+
+Fake-TLS (`ee…` secret) MTProxies disguise MTProto as a TLS session to a
+real website, which is why they keep working where Telegram is blocked.
+GramJS — including its latest release, 2.26.22 — only supports plain and
+`dd` secrets; before this change an `ee` secret failed deep inside the
+connection ("MTProxy secret must be a hex-string representing 16 bytes").
+
+`server/src/ingestion/fakeTlsConnection.js` adds the transport:
+Chrome-like 517-byte ClientHello (SNI = the secret's domain) whose random is
+HMAC-SHA256(key, hello) with the timestamp XORed in; verification of the
+proxy's HMAC-signed ServerHello; then the obfuscated2 stream with the
+"secure" padded-intermediate framing, carried in TLS ApplicationData
+records. It is installed on the GramJS client (`applyProxyTransport`) for
+ingestion, Telegram-native translation, the login script and
+`npm run telegram:check-proxy`.
+
+**How it was verified.** This development sandbox cannot reach Telegram
+itself (outbound connections to Telegram are blocked by its network policy),
+so the transport was tested against two independent, widely deployed
+Fake-TLS proxy servers running locally, with their upstream routed (via
+SOCKS5) to a stub data centre that decodes the obfuscated2 stream and
+echoes every packet:
+
+| Proxy | Result |
+|---|---|
+| alexbers/mtprotoproxy (Python, `tls`-only mode) | handshake accepted; 40 B – 40 KB packets round-trip byte-exact; secure tag `dddddddd` |
+| 9seconds/mtg v2.2.8 (Go; 5 s time-skew limit, anti-replay on) | same; mtg logged the correct DC id from the header |
+| either, wrong secret | clear error naming wrong secret / clock skew |
+
+The full `TelegramClient` path was also checked: GramJS's first MTProto
+packet (req_pq) arrived intact at the stub through mtg. A regression test
+(`fakeTlsConnection.test.js`) runs the same round trip in CI against an
+in-process port of mtprotoproxy's server handshake. **Not yet verified:** a
+session against real Telegram through your production proxy — run
+`npm run telegram:check-proxy` on the server first.
+
 ## Not yet verified against live Telegram
 
 Everything above is covered by tests against real Postgres with a fake

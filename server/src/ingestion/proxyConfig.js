@@ -7,31 +7,39 @@
 //              optionally TELEGRAM_PROXY_USERNAME / TELEGRAM_PROXY_PASSWORD
 //   MTProxy:   TELEGRAM_PROXY_IP, TELEGRAM_PROXY_PORT, TELEGRAM_PROXY_SECRET
 //
-// MTProxy secret formats (checked against GramJS 2.26's TCPMTProxy):
-//   - 32 hex chars (plain) and "dd" + 32 hex chars (padded) are supported.
-//   - "ee" + 32 hex + hex-encoded domain (Fake-TLS, the format most public
-//     MTProxy links now use) is NOT supported by GramJS — it would fail deep
-//     inside the connection with "MTProxy secret must be a hex-string
-//     representing 16 bytes". It is rejected here, at startup, with a clear
-//     message instead. Use the proxy's dd/plain secret if it offers one, or a
-//     SOCKS5 proxy.
-//   - Secrets copied from tg://proxy links are sometimes base64url; those
-//     are converted to hex.
-export function normalizeMtproxySecret(raw) {
+// MTProxy secret formats:
+//   - 32 hex chars (plain) and "dd" + 32 hex chars (padded) are handled by
+//     GramJS's own MTProxy transport.
+//   - "ee" + 32 hex + hex-encoded domain (Fake-TLS) is not supported by GramJS
+//     at all; it is handled by our own transport in fakeTlsConnection.js. The
+//     proxy object then carries the 16-byte key as `secret` and the domain as
+//     `fakeTlsDomain`.
+//   - Secrets copied from tg://proxy links are sometimes base64/base64url;
+//     those are converted to hex.
+export function parseMtproxySecret(raw) {
+  const secret = toHex(raw);
+  if (secret.startsWith('ee') && secret.length > 34) {
+    const domain = Buffer.from(secret.slice(34), 'hex').toString('latin1');
+    if (!/^[a-z0-9.-]+$/i.test(domain)) {
+      throw new Error('TELEGRAM_PROXY_SECRET looks like a Fake-TLS ("ee") secret but its domain part is not a hostname');
+    }
+    return { secret: secret.slice(2, 34), fakeTlsDomain: domain };
+  }
+  return { secret: normalizeMtproxySecret(secret) };
+}
+
+function toHex(raw) {
   let secret = String(raw).trim();
   if (!/^[0-9a-f]+$/i.test(secret)) {
     const decoded = Buffer.from(secret.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
     if (decoded.length === 0) throw new Error('TELEGRAM_PROXY_SECRET is neither hex nor base64');
     secret = decoded.toString('hex');
   }
-  secret = secret.toLowerCase();
+  return secret.toLowerCase();
+}
 
-  if (secret.startsWith('ee') && secret.length > 34) {
-    throw new Error(
-      'TELEGRAM_PROXY_SECRET is a Fake-TLS ("ee...") MTProxy secret, which GramJS does not support. ' +
-        'Use the proxy\'s plain/"dd" secret if it has one, or configure a SOCKS5 proxy instead.'
-    );
-  }
+export function normalizeMtproxySecret(raw) {
+  const secret = toHex(raw);
   if (secret.length === 34 && secret.startsWith('dd')) return secret;
   if (secret.length === 32) return secret;
   throw new Error(
@@ -50,7 +58,7 @@ export function buildProxyConfig(env = process.env) {
   }
 
   if (env.TELEGRAM_PROXY_SECRET) {
-    return { ...base, secret: normalizeMtproxySecret(env.TELEGRAM_PROXY_SECRET), MTProxy: true };
+    return { ...base, ...parseMtproxySecret(env.TELEGRAM_PROXY_SECRET), MTProxy: true };
   }
 
   return {
@@ -64,5 +72,10 @@ export function buildProxyConfig(env = process.env) {
 // For logs: never includes the secret or password.
 export function describeProxy(proxy) {
   if (!proxy) return 'direct connection';
-  return `${proxy.MTProxy ? 'MTProxy' : `SOCKS${proxy.socksType}`} ${proxy.ip}:${proxy.port}`;
+  const kind = proxy.fakeTlsDomain
+    ? `MTProxy (Fake-TLS, SNI ${proxy.fakeTlsDomain})`
+    : proxy.MTProxy
+      ? 'MTProxy'
+      : `SOCKS${proxy.socksType}`;
+  return `${kind} ${proxy.ip}:${proxy.port}`;
 }

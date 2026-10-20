@@ -9,6 +9,7 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import input from 'input';
 import { buildProxyConfig, describeProxy } from './proxyConfig.js';
+import { applyProxyTransport } from './fakeTlsConnection.js';
 
 async function main() {
   const apiId = Number(process.env.TELEGRAM_API_ID);
@@ -30,6 +31,7 @@ async function main() {
     connectionRetries: 3,
     proxy,
   });
+  applyProxyTransport(client, proxy);
 
   await client.start({
     phoneNumber: async () => await input.text('Phone number (with country code): '),

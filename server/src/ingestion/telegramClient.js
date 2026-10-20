@@ -4,6 +4,7 @@ import { UpdateConnectionState } from 'telegram/network/index.js';
 import { returnBigInt } from 'telegram/Helpers.js';
 import { pool } from '../db/pool.js';
 import { buildProxyConfig, describeProxy } from './proxyConfig.js';
+import { applyProxyTransport } from './fakeTlsConnection.js';
 import { RateGate } from '../pipeline/rateGate.js';
 
 let client = null;
@@ -70,6 +71,7 @@ export async function getTelegramClient() {
       floodSleepThreshold: Number(process.env.TELEGRAM_FLOOD_SLEEP_THRESHOLD || 10),
       proxy,
     });
+    applyProxyTransport(c, proxy);
     if (proxy) console.log(`[telegram] connecting via ${describeProxy(proxy)}`);
 
     c.addEventHandler((update) => {
