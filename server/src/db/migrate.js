@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool } from './pool.js';
+import { describeError, connectionHint } from './describeError.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, '../../../db/migrations');
@@ -36,7 +37,7 @@ async function run() {
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
-        throw new Error(`Migration ${file} failed: ${err.message}`);
+        throw new Error(`Migration ${file} failed: ${describeError(err)}`);
       }
     }
 
@@ -48,6 +49,8 @@ async function run() {
 }
 
 run().catch((err) => {
-  console.error(err.message);
+  console.error(`Migration failed: ${describeError(err)}`);
+  const hint = connectionHint(err);
+  if (hint) console.error(hint);
   process.exit(1);
 });
