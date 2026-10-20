@@ -181,9 +181,13 @@ echoes every packet:
 The full `TelegramClient` path was also checked: GramJS's first MTProto
 packet (req_pq) arrived intact at the stub through mtg. A regression test
 (`fakeTlsConnection.test.js`) runs the same round trip in CI against an
-in-process port of mtprotoproxy's server handshake. **Not yet verified:** a
-session against real Telegram through your production proxy — run
-`npm run telegram:check-proxy` on the server first.
+in-process port of mtprotoproxy's server handshake.
+
+**Verified against real Telegram (Oct 2026):** from the operator's network in
+Pakistan, `npm run telegram:check-proxy` completed the MTProto key exchange
+and an encrypted request through two public Fake-TLS proxies
+(`3.atxng.com:443`, ~3.1 s; `mtproto.online:443`, ~3.4 s). Run the same
+command on the server before deploying, since free proxies come and go.
 
 ## Not yet verified against live Telegram
 
