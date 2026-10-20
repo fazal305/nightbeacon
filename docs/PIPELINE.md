@@ -185,8 +185,9 @@ in-process port of mtprotoproxy's server handshake.
 
 **Verified against real Telegram (Oct 2026):** from the operator's network in
 Pakistan, `npm run telegram:check-proxy` completed the MTProto key exchange
-and an encrypted request through two public Fake-TLS proxies
-(`3.atxng.com:443`, ~3.1 s; `mtproto.online:443`, ~3.4 s). Run the same
+and an encrypted request through 21 of 22 public proxies from a mixed list —
+six Fake-TLS (`ee`), plus plain, `dd` and base64-encoded secrets — in
+2.5–4.5 s each (the 22nd timed out). Run the same
 command on the server before deploying, since free proxies come and go.
 
 ## Not yet verified against live Telegram
