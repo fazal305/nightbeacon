@@ -27,6 +27,9 @@ import path from 'node:path';
 //                    corroboration shows (default PUBLISH_SETTLE_MINUTES, 3)
 //   sourceCredit     "none" | "channel"
 //   parseMode        "none" | "html" | "markdown" (bot channels)
+//   digest           scheduled summary posts, e.g.
+//                    { "times": ["09:00", "21:00"], "maxStories": 10 }
+//                    (local times in PUBLISH_TIMEZONE, default Asia/Karachi)
 //   media            false to post text only (default: the source's
 //                    photos/videos are posted with the text)
 //   enabled          false to pause a channel
@@ -79,6 +82,16 @@ function readChannelsFile(file) {
   return parsed;
 }
 
+function normalizeDigest(digest, key) {
+  if (!digest) return null;
+  const times = (Array.isArray(digest.times) ? digest.times : [digest.times]).map((t) => String(t).trim());
+  for (const t of times) {
+    if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(t)) throw new Error(`publish channel "${key}": digest time "${t}" must be HH:MM`);
+  }
+  if (times.length === 0) return null;
+  return { times: times.map((t) => t.padStart(5, '0')), maxStories: Number(digest.maxStories || 10) };
+}
+
 export function normalizeChannels(rawChannels, defaults) {
   const seen = new Set();
   return rawChannels.map((c, i) => {
@@ -106,6 +119,7 @@ export function normalizeChannels(rawChannels, defaults) {
       sourceCredit: (c.sourceCredit || defaults.sourceCredit).toLowerCase(),
       parseMode: (c.parseMode || defaults.parseMode).toLowerCase(),
       media: c.media !== false,
+      digest: normalizeDigest(c.digest, key),
     };
   });
 }
@@ -186,6 +200,8 @@ export function publishConfig(env = process.env) {
     // daily allowance); empty = the provider's usual model env (GROQ_MODEL…).
     draftModel: (env.DRAFT_LLM_MODEL || '').trim(),
     draftMaxPerMinute: Number(env.DRAFT_MAX_PER_MINUTE || 10),
+    // Local time zone for digest times.
+    timeZone: env.PUBLISH_TIMEZONE || 'Asia/Karachi',
   };
 }
 

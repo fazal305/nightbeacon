@@ -35,12 +35,18 @@ async function expireStale(config) {
        AND ri.telegram_date < now() - make_interval(mins => $1)`,
     [config.maxAgeMinutes]
   );
+  await pool.query(
+    `UPDATE publications SET status = 'expired', last_error = 'summary too old by the time it was approved', updated_at = now()
+     WHERE kind = 'digest' AND status = 'approved' AND origin = 'auto'
+       AND digest_slot < now() - make_interval(mins => $1)`,
+    [config.maxAgeMinutes]
+  );
 }
 
 // Photos/videos for the post (channel option "media", default on). Any
 // problem fetching them means a text-only post, never a lost one.
 async function mediaFor(pub, channel, loadMedia, config) {
-  if (channel.media === false) return [];
+  if (channel.media === false || !pub.raw_item_id) return [];
   try {
     const best = await loadBestMedia(pub.raw_item_id, { officialUsernames: [...config.officialSources.keys()], loadMedia });
     return best.media;
@@ -76,7 +82,7 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
 
   const { rows: waiting } = await pool.query(
     `SELECT 1 FROM publications WHERE status = 'approved' AND channel_key = ANY($1)
-       AND (origin = 'manual' OR channel_key = ANY($2)) LIMIT 1`,
+       AND (origin = 'manual' OR kind = 'digest' OR channel_key = ANY($2)) LIMIT 1`,
     [botKeys, autoKeys]
   );
   if (waiting.length === 0) return [];
@@ -86,8 +92,8 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   const { rows } = await pool.query(
     `UPDATE publications SET status = 'sending', updated_at = now()
      WHERE id = (SELECT id FROM publications WHERE status = 'approved' AND channel_key = ANY($1)
-                   AND (origin = 'manual' OR channel_key = ANY($2))
-                 ORDER BY (origin = 'manual') DESC, score DESC NULLS LAST, approved_at, id
+                   AND (origin = 'manual' OR kind = 'digest' OR channel_key = ANY($2))
+                 ORDER BY (origin = 'manual' OR kind = 'digest') DESC, score DESC NULLS LAST, approved_at, id
                  LIMIT 1 FOR UPDATE SKIP LOCKED)
      RETURNING id, raw_item_id, final_text, channel_key`,
     [botKeys, autoKeys]

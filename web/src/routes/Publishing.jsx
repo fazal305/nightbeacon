@@ -105,6 +105,7 @@ export function PublicationCard({ pub, t, compact = false }) {
   }
 
   const manual = pub.delivery === 'manual';
+  const digest = pub.kind === 'digest';
   const editable = pub.status === 'draft' || pub.status === 'approved';
   const busy = act.isPending;
   const button = (action, label, tone = 'border-border text-text-muted hover:text-text') => (
@@ -125,6 +126,12 @@ export function PublicationCard({ pub, t, compact = false }) {
           {pub.channel_name} · {t(`publishing.delivery.${pub.delivery}`)}
         </span>
         <span className="rounded border border-border px-1.5 py-0.5">{t(`publishing.status.${pub.status}`)}</span>
+        {digest && (
+          <span className="rounded border border-accent px-1.5 py-0.5 text-accent">
+            {t('publishing.digest', { time: when(pub.digest_slot) })}
+          </span>
+        )}
+        {digest && pub.score_detail && <span>{pub.score_detail}</span>}
         <PriorityBadge priority={pub.item_priority} />
         <CategoryBadge category={pub.category} />
         {pub.dedup_status === 'update' && <span className="text-accent">{t('feed.storyUpdate')}</span>}
@@ -134,7 +141,7 @@ export function PublicationCard({ pub, t, compact = false }) {
             {t('publishing.score', { score: Math.round(pub.score) })}
           </span>
         )}
-        {!compact && (
+        {!compact && !digest && (
           <>
             <span>· @{pub.channel_username} · {when(pub.telegram_date)}</span>
             <Link to={`/content/${pub.raw_item_id}`} className="text-accent hover:underline">
@@ -177,7 +184,7 @@ export function PublicationCard({ pub, t, compact = false }) {
             ? button('mark_sent', t('publishing.markSent'), 'border-status-good text-status-good')
             : button('approve', t('publishing.approve'), 'border-accent text-accent hover:bg-accent/10'),
           button('save', t('publishing.save')),
-          button('redraft', t('publishing.redraft')),
+          !digest && button('redraft', t('publishing.redraft')),
           button('reject', t('publishing.reject'), 'border-priority-high text-priority-high'),
         ]}
         {pub.status === 'approved' && [button('save', t('publishing.save')), button('reject', t('publishing.reject'), 'border-priority-high text-priority-high')]}
@@ -185,10 +192,10 @@ export function PublicationCard({ pub, t, compact = false }) {
           manual
             ? button('mark_sent', t('publishing.markSent'), 'border-status-good text-status-good')
             : button('approve', t('publishing.retry'), 'border-accent text-accent'),
-          button('redraft', t('publishing.redraft')),
+          !digest && button('redraft', t('publishing.redraft')),
         ]}
-        {pub.status === 'rejected' && button('redraft', t('publishing.redraft'))}
-        {!compact && (
+        {pub.status === 'rejected' && !digest && button('redraft', t('publishing.redraft'))}
+        {!compact && !digest && (
           <button onClick={() => setShowSource((v) => !v)} className="text-xs text-text-muted hover:text-text">
             {showSource ? t('publishing.hideSource') : t('publishing.showSource')}
           </button>

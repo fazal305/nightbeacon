@@ -191,3 +191,59 @@ export function parseMultiDraft(content, keys) {
   }
   return out;
 }
+
+// Scheduled summary of several stories for one channel. Same factual rules
+// as single posts; each story is summarised in a line or two.
+export function buildDigestMessages({ channel, style, stories, since, timeZone, terminology = [], officialSources = new Map() }) {
+  const organisations = [...new Set(officialSources.values())];
+  const rules = [
+    `You write the scheduled news summary for the Telegram channel "${channel.name}".`,
+    'Summarise the most important developments below in ONE post, in English, in this channel\'s house style ' +
+      '(emoji, capitalisation, footer — see its rules and examples). Open with a short title line for the summary, ' +
+      'then one entry per story: one or two short lines, most important first, related stories may be merged.',
+    'Use only facts stated in the reports. Never invent details, numbers, names, places or times. Keep every figure exactly as reported.',
+    'Attribute statements with the neutral verb "said" for every side; do not use "claimed", "alleged", "admitted" or "boasted".',
+    'Never say where a report came from: no Telegram channel names or @handles, no "reported by N channels", no "according to sources", no links, no source or credit lines.',
+    'Never use the Israeli flag emoji (🇮🇱).',
+    'Keep the whole post under 3500 characters.',
+    `If there is nothing worth summarising, reply exactly ${SKIP_TOKEN}.`,
+    'Reply with the post text only.',
+  ];
+  if (organisations.length) {
+    rules.push(
+      `Statements by ${organisations.join(', ')}: include one only if its story is marked "official statement"; ` +
+        'then use its exact words (a short exact excerpt is fine) — never paraphrase it. Leave out statements by them marked "unofficial channel".'
+    );
+  }
+  if (terminology.length) {
+    rules.push('Always use these names:\n' + terminology.map((r) => `- write "${r.replacement}" instead of "${r.term}"`).join('\n'));
+  }
+  const system = [
+    rules.join('\n'),
+    style.guide ? `Posting rules from the editor:\n${style.guide}` : null,
+    `Recent posts from this channel (style reference only — do not reuse their facts):\n${examplesBlock(style.examples)}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+  const sinceLocal = new Date(since).toLocaleString('en-GB', { timeZone, dateStyle: 'medium', timeStyle: 'short' });
+  const user = [
+    `Stories since ${sinceLocal} (${timeZone}), most important first:`,
+    ...stories.map((s, i) => {
+      const text = (s.translated_text || s.raw_text || '').slice(0, 700);
+      const org = officialSources.get(String(s.channel_username || '').toLowerCase());
+      const tags = [
+        s.priority,
+        s.reports > 1 ? `${s.reports} reports` : null,
+        s.dedup_status === 'update' ? 'update' : null,
+        organisations.length ? (org ? `official statement of ${org}` : 'unofficial channel') : null,
+      ].filter(Boolean);
+      return `\n[${i + 1}] (${tags.join(', ')}) ${new Date(s.telegram_date).toISOString()}\n${text}`;
+    }),
+  ].join('\n');
+
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: user },
+  ];
+}

@@ -3,6 +3,7 @@ import { callLLM } from '../processing/llmClient.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
+import { runDigestTick } from './digest.js';
 import {
   buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags,
   keepsStatementVerbatim, statementText, officialOrganisation,
@@ -76,7 +77,7 @@ async function queueAutomaticDrafts(config) {
     // Drafts the model rejected as not worth posting don't use up a slot.
     const { rows: [recent] } = await pool.query(
       `SELECT count(*)::int AS n, max(created_at) AS last_at FROM publications
-       WHERE channel_key = $1 AND origin = 'auto' AND created_at > now() - interval '1 hour'
+       WHERE channel_key = $1 AND origin = 'auto' AND kind = 'post' AND created_at > now() - interval '1 hour'
          AND NOT (status = 'rejected' AND last_error IS NOT DISTINCT FROM $2)`,
       [channel.key, SKIPPED_BY_MODEL]
     );
@@ -208,11 +209,12 @@ export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext
   const config = publishConfig();
   await expireStaleRequests(config);
   await queueAutomaticDrafts(config);
+  const digests = await runDigestTick({ llm, styleFn });
   const groups = await claimRequested();
-  if (groups.length === 0) return [];
+  if (groups.length === 0) return digests;
 
   if (!gate) gate = new RateGate(60_000 / config.draftMaxPerMinute);
-  const results = [];
+  const results = [...digests];
 
   for (let g = 0; g < groups.length; g++) {
     const group = groups[g];

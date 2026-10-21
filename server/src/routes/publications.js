@@ -25,8 +25,8 @@ const SELECT_PUBLICATIONS = `
          'https://t.me/' || s.channel_username || '/' || ri.telegram_message_id AS source_url,
          t.translated_text, st.item_count AS story_item_count
   FROM publications p
-  JOIN raw_items ri ON ri.id = p.raw_item_id
-  JOIN sources s ON s.id = ri.source_id
+  LEFT JOIN raw_items ri ON ri.id = p.raw_item_id
+  LEFT JOIN sources s ON s.id = ri.source_id
   LEFT JOIN translations t ON t.raw_item_id = ri.id
   LEFT JOIN stories st ON st.id = p.story_id`;
 
@@ -169,8 +169,11 @@ publicationsRouter.patch('/:id', h(async (req, res) => {
   const { action, text } = parsed.data;
   const rule = ACTIONS[action];
 
-  const current = await pool.query('SELECT status, channel_key FROM publications WHERE id = $1', [id]);
+  const current = await pool.query('SELECT status, channel_key, kind FROM publications WHERE id = $1', [id]);
   if (current.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+  if (current.rows[0].kind === 'digest' && action === 'redraft') {
+    return res.status(409).json({ error: 'A summary can\'t be redrafted — edit the text or reject it' });
+  }
   const config = publishConfig();
   const delivery = channelByKey(config, current.rows[0].channel_key)?.delivery ?? 'manual';
   if (rule.delivery && rule.delivery !== delivery) {

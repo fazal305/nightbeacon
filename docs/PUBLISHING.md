@@ -58,6 +58,19 @@ bot only posts what you approve), whether fresh high/medium stories are fully
 processed, the drafts and their last errors, the bot login, and whether the
 bot is an admin of the bot channel with "Post messages".
 
+## Scheduled summaries
+
+A channel with `"digest": { "times": ["09:00", "21:00"], "maxStories": 10 }`
+gets a summary post at those local times (`PUBLISH_TIMEZONE`, default
+`Asia/Karachi`): the most important stories since the previous summary
+(priority × how many channels carried them), one or two lines each, in the
+channel's style and with the same rules as single posts (facts only,
+neutral "said", no sources, house terminology, official statements only
+verbatim from official channels). Fewer than 3 notable stories → no summary.
+A summary missed by more than an hour (computer off) is skipped, not posted
+late. Bot channels post it automatically in `auto` mode (it doesn't use up
+an hourly slot); otherwise it waits for approval / for you to post it.
+
 ## Photos and videos
 
 When the source post has photos, videos or GIFs (a whole album included),

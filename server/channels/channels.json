@@ -1,6 +1,7 @@
 [
   { "key": "r3syst", "name": "R3SYST", "telegram": "@r3syst", "delivery": "bot",
-    "draftPriorities": ["high", "medium"], "autoPriorities": ["high"], "styleGuideFile": "r3syst.md" },
+    "draftPriorities": ["high", "medium"], "autoPriorities": ["high"], "styleGuideFile": "r3syst.md",
+    "digest": { "times": ["09:00", "21:00"], "maxStories": 10 } },
   { "key": "rmn", "name": "Resistance Media News", "telegram": "@ResistanceMediaNews", "delivery": "manual",
     "draftPriorities": ["high"], "styleGuideFile": "rmn.md" },
   { "key": "givi", "name": "GiviDpr", "telegram": "@GiviDpr", "delivery": "manual",

@@ -9,6 +9,7 @@ import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, remo
 import { parseTerminology } from './config.js';
 import { runDraftingTick } from './drafter.js';
 import { runPublishingTick, publishGate } from './sender.js';
+import { digestSlots, runDigestTick } from './digest.js';
 import { publicationsRouter } from '../routes/publications.js';
 
 // Real Postgres; the LLM and the bot are injected fakes.
@@ -387,6 +388,55 @@ test('sender: the post\'s media is passed to the bot; a media problem means a te
   });
   assert.deepEqual(got, []);
   assert.equal((await pubFor(item2)).status, 'published');
+});
+
+test('digest: slots are local times in the configured zone', () => {
+  // 10:30 in Pakistan (UTC+5) on 21 Oct: current slot 09:00 today, previous 21:00 yesterday.
+  const { current, previous } = digestSlots(['09:00', '21:00'], 'Asia/Karachi', new Date('2026-10-21T05:30:00Z'));
+  assert.equal(current.toISOString(), '2026-10-21T04:00:00.000Z');
+  assert.equal(previous.toISOString(), '2026-10-20T16:00:00.000Z');
+  assert.equal(digestSlots(['9:00'], 'UTC', new Date('2026-10-21T08:00:00Z')).current.toISOString(), '2026-10-20T09:00:00.000Z');
+});
+
+test('digest: posted once per slot, auto-approved on the bot channel, skipped when late or quiet; sent past the hourly cap without media', async () => {
+  process.env.PUBLISH_MODE = 'auto';
+  process.env.PUBLISH_TIMEZONE = 'UTC';
+  const fiveMinAgo = new Date(Date.now() - 5 * 60_000);
+  const time = `${String(fiveMinAgo.getUTCHours()).padStart(2, '0')}:${String(fiveMinAgo.getUTCMinutes()).padStart(2, '0')}`;
+  setChannels([{ ...MAIN, maxPerHour: 1, digest: { times: [time], maxStories: 5 } }]);
+  const slot = digestSlots([time], 'UTC', new Date()).current;
+  for (let i = 0; i < 4; i++) await readyItem({ minutesAgo: 5 + i, text: `Story number ${i} with 3 casualties.` });
+  let prompt;
+  const llm = async (messages) => ((prompt = messages), { content: '🔴 Summary\n1. One\n2. Two\n3. Three', model: 'fake' });
+  try {
+    await runDigestTick({ llm, styleFn: style });
+    const { rows } = await pool.query(`SELECT * FROM publications WHERE kind = 'digest'`);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].status, 'approved');
+    assert.match(rows[0].score_detail, /summary of \d+ stories/);
+    assert.match(prompt[1].content, /Story number 0/);
+    assert.match(prompt[0].content, /neutral verb "said"/);
+
+    await runDigestTick({ llm: async () => assert.fail('only once per slot'), styleFn: style, now: new Date(slot.getTime() + 30 * 60_000) });
+    await runDigestTick({ llm: async () => assert.fail('too late'), styleFn: style, now: new Date(slot.getTime() + 24 * 3600_000 + 2 * 3600_000) });
+
+    // A regular post already used this hour's only slot; the summary still goes, with no media.
+    const item = await readyItem();
+    await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, published_at) VALUES ($1, 'main', 'published', 'auto', 'x', now())`, [item]);
+    let sent;
+    await runPublishingTick({ send: async (t, ch, cfg, media) => ((sent = { t, media }), { messageId: 9 }), loadMedia: async () => assert.fail('no media for summaries') });
+    assert.match(sent.t, /Summary/);
+    assert.deepEqual(sent.media, []);
+
+    setChannels([{ ...MAIN, digest: { times: ['00:00'] } }]);
+    const quiet = new Date('2031-01-01T00:10:00Z');
+    await runDigestTick({ llm: async () => assert.fail('nothing to summarise'), styleFn: style, now: quiet });
+    const q = (await pool.query(`SELECT status, last_error FROM publications WHERE kind = 'digest' AND digest_slot = '2031-01-01T00:00:00Z'`)).rows[0];
+    assert.equal(q.status, 'rejected');
+    assert.match(q.last_error, /notable stories/);
+  } finally {
+    delete process.env.PUBLISH_TIMEZONE;
+  }
 });
 
 test('sender: a real Telegram error (bot not admin) fails the post after 3 attempts', async () => {
