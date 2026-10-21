@@ -80,7 +80,9 @@ async function main() {
     info(`${channel.telegram}: ${posted.length}/${channel.maxPerHour} posts in the last hour${times ? ` (${times})` : ''}`);
     for (const q of queue) info(`  waiting: ${q.status.padEnd(9)} ${q.priority.padEnd(7)} ${q.n}`);
     if (posted.length >= channel.maxPerHour) {
-      const next = new Date(new Date(posted[0].published_at).getTime() + 3600_000);
+      // Room opens when fewer than maxPerHour posts remain inside the hour:
+      // once the post at index (count - maxPerHour) is an hour old.
+      const next = new Date(new Date(posted[posted.length - channel.maxPerHour].published_at).getTime() + 3600_000);
       info(`  hourly limit reached: next automatic post after ${next.toLocaleTimeString()}`);
     }
     const reviewing = queue.filter((q) => q.status === 'draft').reduce((n, q) => n + q.n, 0);
