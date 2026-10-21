@@ -5,6 +5,7 @@ import Login from './routes/Login';
 import ProtectedRoute from './routes/ProtectedRoute';
 import Feed from './routes/Feed';
 import LiveMonitor from './routes/LiveMonitor';
+import Publishing from './routes/Publishing';
 import Sources from './routes/Sources';
 import SourceInspector from './routes/SourceInspector';
 import Activity from './routes/Activity';
@@ -31,6 +32,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Feed />} />
         <Route path="/live" element={<LiveMonitor />} />
+        <Route path="/publishing" element={<Publishing />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/sources/:id" element={<SourceInspector />} />
         <Route path="/activity" element={<Activity />} />

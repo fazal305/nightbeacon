@@ -14,6 +14,7 @@ import { taxonomyRouter } from './routes/taxonomy.js';
 import { subsystemsRouter } from './routes/subsystems.js';
 import { activityRouter } from './routes/activity.js';
 import { pipelineRouter } from './routes/pipeline.js';
+import { publicationsRouter } from './routes/publications.js';
 import { requireAuth } from './middleware/requireAuth.js';
 
 const PgSession = connectPgSimple(session);
@@ -63,6 +64,7 @@ export function createApp() {
   app.use('/api/subsystems', requireAuth, subsystemsRouter);
   app.use('/api/activity', requireAuth, activityRouter);
   app.use('/api/pipeline', requireAuth, pipelineRouter);
+  app.use('/api/publications', requireAuth, publicationsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -71,7 +73,7 @@ export function createApp() {
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
     console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: err.expose ? err.message : 'Internal server error' });
   });
 
   return app;

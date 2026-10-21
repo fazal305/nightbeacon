@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pool } from '../db/pool.js';
-import { runTranslationTick } from './translate.js';
+import { runTranslationTick, chunkForBatch, parseBatchReply, buildBatchMessages } from './translate.js';
 import { looksLikeEnglish } from './detectLanguage.js';
 
 test('looksLikeEnglish: deterministic script detection', () => {
@@ -56,6 +56,23 @@ test('translation tick never overwrites raw_text, even on failure', async () => 
 
   await pool.query('DELETE FROM raw_items WHERE source_id = $1', [sourceId]);
   await pool.query('DELETE FROM sources WHERE id = $1', [sourceId]);
+});
+
+test('batch translation: chunks respect item and character limits', () => {
+  const items = Array.from({ length: 7 }, (_, i) => ({ id: i, raw_text: 'x'.repeat(i === 3 ? 900 : 100) }));
+  const chunks = chunkForBatch(items, 3, 1000);
+  assert.deepEqual(chunks.map((c) => c.map((i) => i.id)), [[0, 1, 2], [3, 4], [5, 6]]); // 900 + 100 chars is exactly the limit
+  assert.deepEqual(chunkForBatch([{ id: 1, raw_text: 'y'.repeat(5000) }], 3, 1000).length, 1, 'an oversized post still gets its own chunk');
+});
+
+test('batch translation: prompt uses short indexes; reply parsing keeps only valid, in-range, first entries', () => {
+  const msgs = buildBatchMessages([{ id: 900, raw_text: 'سلام' }, { id: 901, raw_text: 'مرحبا' }]);
+  assert.deepEqual(JSON.parse(msgs[1].content), [{ i: 1, text: 'سلام' }, { i: 2, text: 'مرحبا' }]);
+
+  const reply = 'Here you go:\n```json\n[{"i":1,"lang":"fa","en":"Hello"},{"i":1,"en":"dup"},{"i":3,"en":"out of range"},{"i":2,"en":""}]\n```';
+  const got = parseBatchReply(reply, 2);
+  assert.deepEqual([...got.entries()], [[1, { en: 'Hello', lang: 'fa' }]], 'item 2 (empty) is left for the one-by-one fallback');
+  assert.throws(() => parseBatchReply('sorry, cannot help', 2), /not a JSON array/);
 });
 
 test.after(async () => {

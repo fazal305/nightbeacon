@@ -40,6 +40,9 @@ this required.
 - Duplicate detection **before** translation: exact, fuzzy, and optional
   cross-language semantic matching (local multilingual embeddings) groups
   relays into stories; reports with new figures are kept as story updates
+- Publishing: drafts in each of your channels' own style (one LLM call for
+  all channels); the bot posts approved drafts to the channel it admins at a
+  ban-safe pace, other channels get Copy + Mark as sent — see [`docs/PUBLISHING.md`](docs/PUBLISHING.md)
 - Per-stage latency, queue depth and ingestion health metrics
   (`/api/pipeline/metrics`, Live Monitor's Pipeline panel)
 - Crash-safe ingestion — see [`docs/POLLING.md`](docs/POLLING.md)

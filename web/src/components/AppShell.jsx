@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 const NAV_ITEMS = [
   { to: '/dashboard', key: 'dashboard' },
   { to: '/live', key: 'live' },
+  { to: '/publishing', key: 'publishing' },
   { to: '/sources', key: 'sources' },
   { to: '/activity', key: 'activity' },
   { to: '/settings', key: 'settings' },

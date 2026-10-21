@@ -1,5 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PublicationCard } from './Publishing';
+import { useTranslation } from 'react-i18next';
 import { api, ApiError } from '../lib/api';
 import StatusBadge from '../components/StatusBadge';
 import PriorityBadge, { CategoryBadge } from '../components/PriorityBadge';
@@ -158,6 +160,41 @@ function ClassificationSection({ data }) {
   );
 }
 
+// "Draft drawer": this post's version for each of the operator's channels —
+// request drafts, then approve (bot channel) or copy + mark as sent (manual).
+function ChannelDrafts({ itemId }) {
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const variants = useQuery({
+    queryKey: ['publications', 'item', itemId],
+    queryFn: () => api.publicationsForItem(itemId),
+    refetchInterval: (q) => (q.state.data?.items.some((p) => ['requested', 'drafting'].includes(p.status)) ? 3000 : false),
+  });
+  const request = useMutation({
+    mutationFn: () => api.requestDraft(itemId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publications', 'item', itemId] }),
+  });
+  const items = variants.data?.items || [];
+  return (
+    <section className="mb-4 rounded border border-border bg-panel">
+      <div className="flex items-center justify-between px-4 py-2">
+        <h2 className="font-mono text-xs uppercase tracking-wide text-text-muted">{t('publishing.forMyChannels')}</h2>
+        <button
+          onClick={() => request.mutate()}
+          disabled={request.isPending}
+          className="rounded border border-accent px-2 py-1 text-xs text-accent hover:bg-accent/10 disabled:opacity-50"
+        >
+          {items.length ? t('publishing.draftMissing') : t('publishing.draftPost')}
+        </button>
+      </div>
+      {request.isError && <p className="px-4 pb-2 text-xs text-priority-high">{request.error.message}</p>}
+      {items.map((pub) => (
+        <PublicationCard key={pub.id} pub={pub} t={t} compact />
+      ))}
+    </section>
+  );
+}
+
 export default function ContentInspector() {
   const { id } = useParams();
   const { data, isLoading, isError, error } = useQuery({
@@ -216,6 +253,8 @@ export default function ContentInspector() {
       </section>
 
       <StorySection data={data} />
+
+      <ChannelDrafts itemId={data.id} />
 
       <TranslationSection data={data} />
 

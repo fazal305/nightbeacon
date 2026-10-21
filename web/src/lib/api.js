@@ -54,6 +54,12 @@ export const api = {
   taxonomy: () => request('/taxonomy'),
   subsystems: () => request('/subsystems'),
   pipelineMetrics: () => request('/pipeline/metrics'),
+  publications: (params = {}) => request(`/publications?${new URLSearchParams(params).toString()}`),
+  publicationStatus: () => request('/publications/status'),
+  publicationsForItem: (rawItemId) => request(`/publications/item/${rawItemId}`),
+  requestDraft: (rawItemId, channelKey) =>
+    request('/publications', { method: 'POST', body: JSON.stringify({ rawItemId, channelKey }) }),
+  updatePublication: (id, body) => request(`/publications/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   activity: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))

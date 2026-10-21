@@ -17,27 +17,38 @@ const PROVIDERS = {
     modelEnv: 'OPENROUTER_MODEL',
     label: 'OpenRouter',
   },
+  // Local, free, no API key: Ollama's OpenAI-compatible endpoint
+  // (`ollama pull qwen2.5:7b`, then OLLAMA_MODEL=qwen2.5:7b).
+  ollama: {
+    url: () => `${(process.env.OLLAMA_URL || 'http://127.0.0.1:11434').replace(/\/$/, '')}/v1/chat/completions`,
+    apiKeyEnv: null,
+    modelEnv: 'OLLAMA_MODEL',
+    label: 'Ollama',
+  },
 };
 
 // The application must keep functioning if the LLM provider is unavailable —
 // callers catch this and mark the item failed_translation (or revert to
 // 'new' for systemic/quota failures), they never crash.
-export async function callLLM(messages) {
-  const providerName = (process.env.LLM_PROVIDER || 'groq').toLowerCase();
+//
+// `providerName` lets a stage use its own provider (e.g. drafting via
+// DRAFT_LLM_PROVIDER) independently of LLM_PROVIDER.
+export async function callLLM(messages, { providerName = process.env.LLM_PROVIDER || 'groq', temperature = 0.2 } = {}) {
+  providerName = providerName.toLowerCase();
   const provider = PROVIDERS[providerName];
 
   if (!provider) {
-    throw new Error(`Unknown LLM_PROVIDER "${providerName}" — expected one of: ${Object.keys(PROVIDERS).join(', ')}`);
+    throw new Error(`Unknown LLM provider "${providerName}" — expected one of: ${Object.keys(PROVIDERS).join(', ')}`);
   }
 
-  const apiKey = process.env[provider.apiKeyEnv];
+  const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : null;
   const model = process.env[provider.modelEnv];
 
-  if (!apiKey || !model) {
-    throw new Error(`${provider.apiKeyEnv} / ${provider.modelEnv} not configured`);
+  if ((provider.apiKeyEnv && !apiKey) || !model) {
+    throw new Error(`${[provider.apiKeyEnv, provider.modelEnv].filter(Boolean).join(' / ')} not configured`);
   }
 
-  const body = { model, messages, temperature: 0.2 };
+  const body = { model, messages, temperature };
   // Groq's open-weight "reasoning" models (gpt-oss family) spend a large
   // share of their token budget on an internal chain-of-thought trace by
   // default — measured ~260 reasoning tokens for a one-sentence translation,
@@ -49,13 +60,15 @@ export async function callLLM(messages) {
     body.reasoning_effort = 'low';
   }
 
-  const res = await fetch(provider.url, {
+  const url = typeof provider.url === 'function' ? provider.url() : provider.url;
+  const res = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS || 120000)),
   });
 
   if (!res.ok) {

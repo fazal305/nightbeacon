@@ -1,0 +1,21 @@
+[
+  {
+    "key": "main",
+    "name": "Main channel (bot posts here)",
+    "telegram": "@your_main_channel",
+    "delivery": "bot",
+    "draftPriorities": ["high", "medium"],
+    "autoPriorities": ["high"],
+    "styleGuide": "Replace with your posting prompt for this channel: tone, length, emoji, hashtags, sign-off.",
+    "styleExamples": 6
+  },
+  {
+    "key": "alerts",
+    "name": "Alerts channel (you post manually)",
+    "telegram": "@your_alerts_channel",
+    "delivery": "manual",
+    "draftPriorities": ["high"],
+    "styleGuide": "Replace with your posting prompt, e.g. one-line alerts starting with 🔴, no hashtags.",
+    "styleExamples": 6
+  }
+]

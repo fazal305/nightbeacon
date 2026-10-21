@@ -17,7 +17,16 @@ export async function recoverOrphanedStatuses() {
     `UPDATE raw_items SET status = 'translated', updated_at = now() WHERE status = 'tagging' RETURNING id`
   );
 
-  const recovered = translating.rowCount + tagging.rowCount;
+  // Same for publishing claims (table exists from migration 007 on).
+  const publications = await pool
+    .query(
+      `UPDATE publications SET status = CASE status WHEN 'drafting' THEN 'requested' ELSE 'approved' END,
+                               updated_at = now()
+       WHERE status IN ('drafting', 'sending') RETURNING id`
+    )
+    .catch((err) => (err.code === '42P01' ? { rowCount: 0 } : Promise.reject(err)));
+
+  const recovered = translating.rowCount + tagging.rowCount + publications.rowCount;
   if (recovered > 0) {
     console.log(
       `[startup] recovered ${translating.rowCount} orphaned 'translating' + ${tagging.rowCount} orphaned 'tagging' item(s) from a previous process`

@@ -17,7 +17,7 @@
     "telegram:login": "node src/ingestion/generateSession.js",
     "telegram:check-proxy": "node src/ingestion/checkProxy.js",
     "telegram:check-translate": "node src/processing/checkTelegramTranslate.js",
-    "test": "node --import ./src/testSetup.mjs --test --test-concurrency=1 src/ingestion/*.test.js src/processing/*.test.js src/subsystems/*.test.js src/db/*.test.js src/dedup/*.test.js src/pipeline/*.test.js"
+    "test": "node --import ./src/testSetup.mjs --test --test-concurrency=1 src/ingestion/*.test.js src/processing/*.test.js src/subsystems/*.test.js src/db/*.test.js src/dedup/*.test.js src/pipeline/*.test.js src/publishing/*.test.js"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",

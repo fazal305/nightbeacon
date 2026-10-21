@@ -19,7 +19,7 @@ import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.
 // a once-a-minute cron batch, so the per-minute budget is enforced by
 // spacing calls rather than by batch size — a batch can't burst past it, and
 // a slow tick can no longer overlap the next one.
-const BATCH_SIZE = Number(process.env.TRANSLATE_BATCH_SIZE || 20);
+const BATCH_SIZE = Number(process.env.TRANSLATE_BATCH_SIZE || 30);
 const MAX_ATTEMPTS = 5;
 const llmGate = new RateGate(60_000 / Number(process.env.TRANSLATE_MAX_PER_MINUTE || 50));
 // Telegram publishes no limit for messages.translateText, so calls (each up to
@@ -152,25 +152,131 @@ async function processItemLLM(item) {
   }
 }
 
+// Several posts per LLM call ("array" translation): the instructions and the
+// model's reasoning overhead are paid once per batch instead of once per
+// post, which cuts tokens noticeably against Groq's daily cap and cuts
+// requests by ~LLM_TRANSLATE_BATCH x. Posts get short indexes (not DB ids)
+// and every index is checked; anything missing or malformed falls back to
+// the one-post path, so a sloppy reply never loses a post.
+// LLM_TRANSLATE_BATCH=1 restores one call per post.
+const LLM_BATCH = Math.max(1, Number(process.env.LLM_TRANSLATE_BATCH || 15));
+const LLM_BATCH_MAX_CHARS = Number(process.env.LLM_TRANSLATE_BATCH_MAX_CHARS || 4000);
+
+export function chunkForBatch(items, maxItems = LLM_BATCH, maxChars = LLM_BATCH_MAX_CHARS) {
+  const chunks = [];
+  let current = [];
+  let chars = 0;
+  for (const item of items) {
+    const len = (item.raw_text || '').length;
+    if (current.length > 0 && (current.length >= maxItems || chars + len > maxChars)) {
+      chunks.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(item);
+    chars += len;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+export function buildBatchMessages(chunk) {
+  return [
+    {
+      role: 'system',
+      content:
+        'You translate social media / news posts to English for an OSINT analyst. ' +
+        'You receive a JSON array of {"i": number, "text": string}. Reply with ONLY a JSON array with exactly ' +
+        'one entry per input item: [{"i": number, "lang": "<ISO 639-1 code of the original>", "en": "<English translation>"}]. ' +
+        'Keep every number, name and place exactly. No commentary, no Markdown fences.',
+    },
+    { role: 'user', content: JSON.stringify(chunk.map((item, idx) => ({ i: idx + 1, text: item.raw_text }))) },
+  ];
+}
+
+// Returns Map(index -> { lang, en }) for the entries that are usable.
+export function parseBatchReply(content, size) {
+  const text = String(content || '');
+  const start = text.indexOf('[');
+  const end = text.lastIndexOf(']');
+  if (start === -1 || end <= start) throw new Error('batch reply is not a JSON array');
+  const parsed = JSON.parse(text.slice(start, end + 1));
+  const out = new Map();
+  for (const entry of Array.isArray(parsed) ? parsed : []) {
+    const i = Number(entry?.i);
+    const en = typeof entry?.en === 'string' ? entry.en.trim() : '';
+    if (Number.isInteger(i) && i >= 1 && i <= size && en && !out.has(i)) {
+      out.set(i, { en, lang: LANG_CODE_RE.test(entry.lang || '') ? entry.lang.toLowerCase() : null });
+    }
+  }
+  return out;
+}
+
+async function revertToNew(ids) {
+  if (ids.length > 0) {
+    await pool.query(`UPDATE raw_items SET status = 'new', updated_at = now() WHERE id = ANY($1)`, [ids]);
+  }
+}
+
 async function runLLMBatch(claimed) {
   const results = [];
-  for (let i = 0; i < claimed.length; i++) {
-    const result = await processItemLLM(claimed[i]);
-    results.push(result);
-    if (result.systemic) {
-      // Once the provider/quota is confirmed down for this tick, further
-      // calls in the same batch are just as doomed — stop spending them.
-      // The items already claimed (status='translating') but not yet
-      // attempted must be put back to 'new' explicitly, or they'd be stuck
-      // forever — 'translating' isn't a status the claim query ever re-picks
-      // up.
-      const remaining = claimed.slice(i + 1).map((c) => c.id);
-      if (remaining.length > 0) {
-        await pool.query(`UPDATE raw_items SET status = 'new', updated_at = now() WHERE id = ANY($1)`, [
-          remaining,
-        ]);
+  const toTranslate = [];
+  for (const item of claimed) {
+    const skipped = await trySkip(item);
+    if (skipped) results.push(skipped);
+    else toTranslate.push(item);
+  }
+
+  const chunks = LLM_BATCH > 1 ? chunkForBatch(toTranslate) : toTranslate.map((item) => [item]);
+  for (let c = 0; c < chunks.length; c++) {
+    const chunk = chunks[c];
+    let leftovers = chunk;
+    if (chunk.length > 1) {
+      try {
+        await llmGate.wait();
+        const { content, model } = await callLLM(buildBatchMessages(chunk));
+        let got = new Map();
+        try {
+          got = parseBatchReply(content, chunk.length);
+        } catch {
+          // Unusable reply: every post in the chunk falls back to one-by-one.
+        }
+        leftovers = [];
+        for (let idx = 0; idx < chunk.length; idx++) {
+          const hit = got.get(idx + 1);
+          if (!hit) {
+            leftovers.push(chunk[idx]);
+            continue;
+          }
+          await commitTranslation(chunk[idx].id, {
+            sourceLanguage: hit.lang,
+            translatedText: hit.en,
+            model,
+            status: 'done',
+          });
+          results.push({ id: chunk[idx].id, outcome: 'translated' });
+        }
+      } catch (err) {
+        if (isSystemicFailure(err.message)) {
+          // Provider down / out of quota: put this chunk and the rest back.
+          await revertToNew(chunks.slice(c).flat().map((i) => i.id));
+          results.push({ id: chunk[0].id, outcome: 'failed', error: err.message, systemic: true });
+          return results;
+        }
+        leftovers = chunk;
       }
-      break;
+    }
+
+    for (let i = 0; i < leftovers.length; i++) {
+      const result = await processItemLLM(leftovers[i]);
+      results.push(result);
+      if (result.systemic) {
+        // Once the provider/quota is confirmed down for this tick, further
+        // calls are just as doomed — put everything not yet attempted back
+        // ('translating' is never re-claimed on its own).
+        await revertToNew([...leftovers.slice(i + 1), ...chunks.slice(c + 1).flat()].map((x) => x.id));
+        return results;
+      }
     }
   }
   return results;

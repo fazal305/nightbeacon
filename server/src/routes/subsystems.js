@@ -3,7 +3,7 @@ import { pool } from '../db/pool.js';
 
 export const subsystemsRouter = Router();
 
-const KNOWN_SUBSYSTEMS = ['ingestion', 'deduplication', 'translation', 'classification'];
+const KNOWN_SUBSYSTEMS = ['ingestion', 'deduplication', 'translation', 'classification', 'drafting', 'publishing'];
 
 // Current health = the latest row per subsystem. A subsystem with no rows at
 // all (never run) is reported explicitly rather than omitted, so the UI

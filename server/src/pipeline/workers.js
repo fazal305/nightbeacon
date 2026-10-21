@@ -3,6 +3,8 @@ import { runDedupTick } from '../dedup/dedupWorker.js';
 import { runTranslationTick } from '../processing/translate.js';
 import { runClassificationTick } from '../processing/classify.js';
 import { startIngestionScheduler } from '../ingestion/scheduler.js';
+import { runDraftingTick } from '../publishing/drafter.js';
+import { runPublishingTick } from '../publishing/sender.js';
 import { sleep } from './rateGate.js';
 
 // Each stage is an independent, non-overlapping loop over a persistent queue
@@ -56,7 +58,11 @@ export function startPipeline() {
   startWorker('deduplication', runDedupTick, { idleMs: 1000 });
   startWorker('translation', runTranslationTick, { idleMs: 2000 });
   startWorker('classification', runClassificationTick, { idleMs: 1000 });
-  console.log('[pipeline] ingestion scheduler + dedup/translation/classification workers started');
+  // Publishing: drafts (automatic per PUBLISH_MODE, or requested from the
+  // dashboard) and the paced bot sender. Both idle cheaply when unused.
+  startWorker('drafting', runDraftingTick, { idleMs: 5000 });
+  startWorker('publishing', runPublishingTick, { idleMs: 3000 });
+  console.log('[pipeline] ingestion scheduler + dedup/translation/classification/drafting/publishing workers started');
 }
 
 export function workerStates() {
