@@ -63,7 +63,35 @@ async function main() {
   );
   for (const e of errors) bad(`${e.channel_key} (${e.status}): ${e.last_error}`);
 
-  console.log('\n4. Bot');
+  console.log('\n4. Posting pace (bot channels, last hour)');
+  for (const channel of config.channels.filter((c) => c.delivery === 'bot')) {
+    const { rows: posted } = await pool.query(
+      `SELECT published_at FROM publications WHERE channel_key = $1 AND status = 'published'
+         AND published_at > now() - interval '1 hour' ORDER BY published_at`,
+      [channel.key]
+    );
+    const { rows: queue } = await pool.query(
+      `SELECT status, coalesce(priority, '-') AS priority, count(*)::int AS n FROM publications
+       WHERE channel_key = $1 AND status IN ('requested', 'drafting', 'draft', 'approved', 'sending')
+       GROUP BY 1, 2 ORDER BY 1, 2`,
+      [channel.key]
+    );
+    const times = posted.map((r) => new Date(r.published_at).toLocaleTimeString()).join(', ');
+    info(`${channel.telegram}: ${posted.length}/${channel.maxPerHour} posts in the last hour${times ? ` (${times})` : ''}`);
+    for (const q of queue) info(`  waiting: ${q.status.padEnd(9)} ${q.priority.padEnd(7)} ${q.n}`);
+    if (posted.length >= channel.maxPerHour) {
+      const next = new Date(new Date(posted[0].published_at).getTime() + 3600_000);
+      info(`  hourly limit reached: next automatic post after ${next.toLocaleTimeString()}`);
+    }
+    const reviewing = queue.filter((q) => q.status === 'draft').reduce((n, q) => n + q.n, 0);
+    if (reviewing) info(`  ${reviewing} draft(s) wait for your approval on the Publishing page (not posted automatically)`);
+    const ready = queue.filter((q) => q.status === 'approved').reduce((n, q) => n + q.n, 0);
+    if (!ready && posted.length < channel.maxPerHour) {
+      info('  nothing approved to post right now: waiting for the next high-priority story to be drafted');
+    }
+  }
+
+  console.log('\n5. Bot');
   if (!config.botToken) return;
   let client;
   try {

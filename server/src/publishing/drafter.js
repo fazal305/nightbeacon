@@ -73,7 +73,14 @@ async function queueAutomaticDrafts(config) {
   if (config.mode === 'off') return 0;
   let queued = 0;
   for (const channel of config.channels) {
-    if (channel.draftPriorities.length === 0 || channel.maxPerHour <= 0) continue;
+    // In auto mode a bot channel's slots go only to stories it will post by
+    // itself (autoPriorities): a slot spent on a draft that then waits for a
+    // review the operator never does is an hour's post lost.
+    const priorities =
+      config.mode === 'auto' && channel.delivery === 'bot'
+        ? channel.draftPriorities.filter((p) => channel.autoPriorities.includes(p))
+        : channel.draftPriorities;
+    if (priorities.length === 0 || channel.maxPerHour <= 0) continue;
     // Drafts the model rejected as not worth posting don't use up a slot.
     const { rows: [recent] } = await pool.query(
       `SELECT count(*)::int AS n, max(created_at) AS last_at FROM publications
@@ -113,7 +120,7 @@ async function queueAutomaticDrafts(config) {
                 || CASE WHEN official THEN ' · official channel' ELSE '' END || ' · ' || age_min || ' min old'
        FROM candidate
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [channel.draftPriorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()]]
+      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()]]
     );
     queued += rowCount;
   }

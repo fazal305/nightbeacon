@@ -241,6 +241,17 @@ test('official statements: word for word; no terminology inside; an altered stat
   assert.equal(keepsStatementVerbatim('HEADER\n"The  statement, here!" https://t.me/x @chan', 'The statement here'), true);
 });
 
+test('selection: in auto mode a bot channel only spends slots on stories it will post itself', async () => {
+  process.env.PUBLISH_MODE = 'auto';
+  setChannels([{ ...MAIN, draftPriorities: ['high', 'medium'], autoPriorities: ['high'], maxPerHour: 60, minGapMinutes: 0 }]);
+  const medium = await readyItem({ priority: 'medium' });
+  const high = await readyItem({ priority: 'high', minutesAgo: 30 });
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  assert.equal(await pubFor(medium), undefined, 'medium would only wait for review');
+  assert.equal((await pubFor(high)).status, 'approved');
+});
+
 test('selection: a story settles before it is picked unless widely reported; a story is not reposted, an update only after 30 min; stale requests expire', async () => {
   setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0 }]);
   const llm = fakeLLM(() => 'Post.');
