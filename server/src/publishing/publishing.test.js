@@ -252,6 +252,27 @@ test('selection: in auto mode a bot channel only spends slots on stories it will
   assert.equal((await pubFor(high)).status, 'approved');
 });
 
+test('selection: a story with a photo/video scores 1.2× (from any copy of the story), unless the channel posts text only', async () => {
+  setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0 }]);
+  const plain = await readyItem({ minutesAgo: 5 });
+  const withMedia = await readyItem({ minutesAgo: 5 });
+  const copy = await readyItem({ minutesAgo: 6, dedup: 'duplicate' });
+  const story = await storyFor(withMedia, 1);
+  await pool.query('UPDATE raw_items SET story_id = $2, has_media = true WHERE id = $1', [copy, story]);
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  const a = await pubFor(plain);
+  const b = await pubFor(withMedia);
+  assert.ok(Math.abs(b.score / a.score - 1.2) < 0.01, `${b.score} vs ${a.score}`);
+  assert.match(b.score_detail, /photo\/video/);
+
+  await pool.query('DELETE FROM publications');
+  setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0, media: false }]);
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  assert.ok(Math.abs((await pubFor(withMedia)).score - (await pubFor(plain)).score) < 0.01, 'text-only channel: no boost');
+});
+
 test('selection: a story settles before it is picked unless widely reported; a story is not reposted, an update only after 30 min; stale requests expire', async () => {
   setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0 }]);
   const llm = fakeLLM(() => 'Post.');

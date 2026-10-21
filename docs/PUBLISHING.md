@@ -144,7 +144,7 @@ posted automatically; it waits for review with a note.
   apart (default: 5 min at 6/hour). Each slot goes to the best-scoring
   candidate:
 
-  `score = priority (high 10, medium 4) × (1 + log2 channels reporting it) × 1.3 if an update × ½ per hour of age`
+  `score = priority (high 10, medium 4) × (1 + log2 channels reporting it) × 1.3 if an update × 1.2 if it has a photo/video × 2 from an official channel × ½ per hour of age`
 
   So a story many of your sources carry beats one only a single channel
   posted, and fresh beats old. A story waits `PUBLISH_SETTLE_MINUTES` (3)

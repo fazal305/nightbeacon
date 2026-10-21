@@ -51,6 +51,8 @@ async function expireStaleRequests(config) {
 //   score = priority (high 10, medium 4)
 //         × corroboration (1 + log2 of how many channels reported the story)
 //         × 1.3 if it's an update with new figures
+//         × 1.2 if the story has a photo/video the channel can post (from
+//           this report or another channel's copy of the story)
 //         × 2 if it comes from an official channel (official-sources.md) —
 //           a statement is published once, by one channel, so it would
 //           otherwise never win on corroboration
@@ -62,11 +64,15 @@ async function expireStaleRequests(config) {
 // update, 30+ minutes later.
 const SKIPPED_BY_MODEL = 'model judged it not worth posting on this channel';
 
+const HAS_MEDIA_SQL = `(ri.has_media OR (ri.story_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM raw_items m WHERE m.story_id = ri.story_id AND m.has_media)))`;
+
 export const SCORE_SQL = `
   (CASE ri.priority WHEN 'high' THEN 10 WHEN 'medium' THEN 4 ELSE 1 END)
   * (1 + ln(greatest(coalesce(st.item_count, 1), 1)) / ln(2))
   * (CASE WHEN ri.dedup_status = 'update' THEN 1.3 ELSE 1 END)
   * (CASE WHEN lower(src.channel_username) = ANY($5::text[]) THEN 2 ELSE 1 END)
+  * (CASE WHEN $6::boolean AND ${HAS_MEDIA_SQL} THEN 1.2 ELSE 1 END)
   * power(0.5, greatest(extract(epoch FROM now() - ri.telegram_date), 0) / 3600.0)`;
 
 async function queueAutomaticDrafts(config) {
@@ -96,6 +102,7 @@ async function queueAutomaticDrafts(config) {
          SELECT ri.id, ri.story_id, ri.priority, ${SCORE_SQL} AS score,
                 coalesce(st.item_count, 1) AS reports, ri.dedup_status,
                 lower(src.channel_username) = ANY($5::text[]) AS official,
+                $6::boolean AND ${HAS_MEDIA_SQL} AS with_media,
                 extract(epoch FROM now() - ri.telegram_date)::int / 60 AS age_min
          FROM raw_items ri
          JOIN sources src ON src.id = ri.source_id
@@ -117,10 +124,11 @@ async function queueAutomaticDrafts(config) {
        SELECT id, story_id, $3, priority, 'auto', 'requested', score,
               priority || ' · ' || reports || CASE WHEN reports = 1 THEN ' channel' ELSE ' channels' END
                 || CASE WHEN dedup_status = 'update' THEN ' · update' ELSE '' END
-                || CASE WHEN official THEN ' · official channel' ELSE '' END || ' · ' || age_min || ' min old'
+                || CASE WHEN official THEN ' · official channel' ELSE '' END
+                || CASE WHEN with_media THEN ' · photo/video' ELSE '' END || ' · ' || age_min || ' min old'
        FROM candidate
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()]]
+      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()], channel.media]
     );
     queued += rowCount;
   }
