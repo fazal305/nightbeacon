@@ -108,7 +108,9 @@ docs/      Architecture, database, API contract, security, deployment docs
 
 ## Local development
 
-See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). On Windows, once set up,
+double-click `start.cmd` to start everything (LibreTranslate if installed,
+PostgreSQL, the server and the web app) and open the dashboard.
 
 ## Security
 
