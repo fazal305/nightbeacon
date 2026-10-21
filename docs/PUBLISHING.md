@@ -71,7 +71,10 @@ the source's wording. Edits apply to the next draft; no restart needed.
 
 `server/channels/official-sources.md` lists the official channels of
 organisations (`@username => Hezbollah`, one per line; find usernames with
-`npm run sources:list -- <name>`). A statement by a listed organisation is
+`npm run sources:list -- <name>`), or fill it from a Telegram folder of
+official channels with `npm run sources:official -- https://t.me/addlist/<slug>`,
+which also adds any of them not yet monitored and guesses each channel's
+organisation from its title (check and correct the names). A statement by a listed organisation is
 posted only when it comes from that organisation's own channel; the same
 statement relayed by any other channel is skipped (`SKIP`). Ordinary news
 from other channels is unaffected. Reports from official channels score
