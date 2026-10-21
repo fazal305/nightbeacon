@@ -213,6 +213,9 @@ export function publishConfig(env = process.env) {
     // Automatic drafts/posts about news older than this are skipped/expired;
     // posts you approve yourself are always sent.
     maxAgeMinutes: Number(env.PUBLISH_MAX_AGE_MINUTES || 120),
+    // Automatic drafts for manual channels that nobody copied within this
+    // many hours expire (the news is stale by then). 0 = keep them.
+    manualDraftMaxHours: Number(env.MANUAL_DRAFT_MAX_HOURS ?? 6),
     draftProvider: (env.DRAFT_LLM_PROVIDER || env.LLM_PROVIDER || DEFAULT_DRAFT_PROVIDERS).toLowerCase(),
     // One model id or a comma-separated list (each Groq model has its own
     // daily allowance); empty = the provider's usual model env (GROQ_MODEL…).

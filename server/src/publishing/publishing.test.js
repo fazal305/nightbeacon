@@ -419,6 +419,35 @@ test('drafter: automatic drafts queued before scored selection (no score) are ex
   assert.equal((await pubFor(item)).status, 'expired');
 });
 
+test('drafter: automatic manual-channel drafts nobody copied expire after 6 hours; your own requests and bot drafts stay', async () => {
+  const old = await readyItem();
+  await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, origin, status, final_text, score, drafted_at) VALUES
+       ($1, 'alerts', 'auto', 'draft', 'stale', 1, now() - interval '7 hours'),
+       ($1, 'main', 'auto', 'draft', 'bot draft', 1, now() - interval '7 hours')`,
+    [old]
+  );
+  const mine = await readyItem();
+  await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, origin, status, final_text, drafted_at) VALUES
+       ($1, 'alerts', 'manual', 'draft', 'asked for', now() - interval '7 hours')`,
+    [mine]
+  );
+  const fresh = await readyItem();
+  await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, origin, status, final_text, score, drafted_at) VALUES
+       ($1, 'alerts', 'auto', 'draft', 'fresh', 1, now() - interval '1 hour')`,
+    [fresh]
+  );
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  const status = async (id, ch) =>
+    (await pool.query('SELECT status FROM publications WHERE raw_item_id = $1 AND channel_key = $2', [id, ch])).rows[0].status;
+  assert.equal(await status(old, 'alerts'), 'expired');
+  assert.equal(await status(old, 'main'), 'draft');
+  assert.equal(await status(mine, 'alerts'), 'draft');
+  assert.equal(await status(fresh, 'alerts'), 'draft');
+});
+
 test('sender: the post\'s media is passed to the bot; a media problem means a text-only post, not a lost one', async () => {
   const item = await readyItem();
   await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item]);

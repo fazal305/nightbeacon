@@ -29,6 +29,17 @@ export function isSystemic(message) {
 // Automatic drafts for news that got too old while waiting (e.g. the LLM
 // was out of quota) are dropped instead of spending tokens on stale news.
 export async function expireStaleRequests(config) {
+  // Automatic drafts for manual channels left uncopied: stale after a few
+  // hours. Drafts you asked for yourself stay.
+  const manual = config.channels.filter((c) => c.delivery !== 'bot').map((c) => c.key);
+  if (config.manualDraftMaxHours > 0 && manual.length) {
+    await pool.query(
+      `UPDATE publications SET status = 'expired', last_error = 'not copied within ' || $3 || ' hours; news too old', updated_at = now()
+       WHERE status = 'draft' AND origin = 'auto' AND kind = 'post' AND channel_key = ANY($1)
+         AND coalesce(drafted_at, created_at) < now() - make_interval(hours => $2)`,
+      [manual, config.manualDraftMaxHours, String(config.manualDraftMaxHours)]
+    );
+  }
   // Queued before scored selection existed (no score): drop rather than
   // draft and post that whole backlog.
   await pool.query(
