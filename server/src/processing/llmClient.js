@@ -27,13 +27,33 @@ const PROVIDERS = {
   },
 };
 
+// Groq's free limits are counted per model (the 429 names the model), so a
+// stage can list several models — "a,b,c" — and spread its work over all
+// their daily allowances: a model that hits a per-day limit is set aside for
+// an hour, one that doesn't exist (404 / decommissioned) for the process.
+const DAILY_LIMIT_COOLDOWN_MS = 60 * 60 * 1000;
+const modelBlockedUntil = new Map(); // "provider:model" -> timestamp
+
+export function isDailyLimit(status, body) {
+  return status === 429 && /per day|TPD|RPD|free-models-per-day/i.test(body);
+}
+
+// Reasoning models (e.g. qwen3) may prefix the answer with <think>…</think>.
+export function stripThinking(content) {
+  return content.replace(/^\s*<think>[\s\S]*?<\/think>\s*/i, '');
+}
+
 // The application must keep functioning if the LLM provider is unavailable —
 // callers catch this and mark the item failed_translation (or revert to
 // 'new' for systemic/quota failures), they never crash.
 //
 // `providerName` lets a stage use its own provider (e.g. drafting via
-// DRAFT_LLM_PROVIDER) independently of LLM_PROVIDER.
-export async function callLLM(messages, { providerName = process.env.LLM_PROVIDER || 'groq', temperature = 0.2 } = {}) {
+// DRAFT_LLM_PROVIDER) independently of LLM_PROVIDER; `model` overrides the
+// provider's model env (one id or a comma-separated list).
+export async function callLLM(
+  messages,
+  { providerName = process.env.LLM_PROVIDER || 'groq', temperature = 0.2, model: modelOverride } = {}
+) {
   providerName = providerName.toLowerCase();
   const provider = PROVIDERS[providerName];
 
@@ -42,12 +62,39 @@ export async function callLLM(messages, { providerName = process.env.LLM_PROVIDE
   }
 
   const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : null;
-  const model = process.env[provider.modelEnv];
+  const models = String(modelOverride || process.env[provider.modelEnv] || '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
 
-  if ((provider.apiKeyEnv && !apiKey) || !model) {
+  if ((provider.apiKeyEnv && !apiKey) || models.length === 0) {
     throw new Error(`${[provider.apiKeyEnv, provider.modelEnv].filter(Boolean).join(' / ')} not configured`);
   }
 
+  let lastError = null;
+  for (const model of models) {
+    const key = `${providerName}:${model}`;
+    if ((modelBlockedUntil.get(key) || 0) > Date.now()) continue;
+    try {
+      return await callModel(provider, providerName, apiKey, model, messages, temperature);
+    } catch (err) {
+      lastError = err;
+      if (err.dailyLimit) {
+        modelBlockedUntil.set(key, Date.now() + DAILY_LIMIT_COOLDOWN_MS);
+        if (models.length > 1) console.warn(`[llm] ${model} reached its daily limit — using the next model for an hour`);
+      } else if (err.status === 404 || /decommissioned|model_not_found|does not exist/i.test(err.message)) {
+        modelBlockedUntil.set(key, Infinity);
+        console.warn(`[llm] model "${model}" is not available on ${provider.label} — skipping it`);
+      } else {
+        throw err;
+      }
+    }
+  }
+  // Every model is out of its daily allowance ("rate limit" marks it systemic).
+  throw lastError || new Error(`${provider.label} rate limit: every configured model reached its daily limit`);
+}
+
+async function callModel(provider, providerName, apiKey, model, messages, temperature) {
   const body = { model, messages, temperature };
   // Groq's open-weight "reasoning" models (gpt-oss family) spend a large
   // share of their token budget on an internal chain-of-thought trace by
@@ -72,8 +119,11 @@ export async function callLLM(messages, { providerName = process.env.LLM_PROVIDE
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`${provider.label} request failed (${res.status}): ${body.slice(0, 200)}`);
+    const text = await res.text().catch(() => '');
+    const err = new Error(`${provider.label} request failed (${res.status}): ${text.slice(0, 200)}`);
+    err.status = res.status;
+    err.dailyLimit = isDailyLimit(res.status, text);
+    throw err;
   }
 
   const data = await res.json();
@@ -81,5 +131,5 @@ export async function callLLM(messages, { providerName = process.env.LLM_PROVIDE
   if (!content) {
     throw new Error(`${provider.label} returned no content`);
   }
-  return { content, model };
+  return { content: stripThinking(content), model };
 }

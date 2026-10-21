@@ -5,6 +5,7 @@ import { translateBatch, isTelegramFloodWait, TRANSLATE_CHUNK_SIZE } from './tel
 import { claimBatch } from '../pipeline/claim.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.js';
+import { WEB_TRANSLATORS, WEB_TRANSLATOR_RATES } from './webTranslate.js';
 
 // Groq's free tier (default LLM provider, see llmClient.js) allows ~1000
 // requests/10min (~100/min sustained) and ~30k tokens/min — confirmed via
@@ -353,12 +354,169 @@ async function runTelegramBatch(claimed) {
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// Rotation across several free providers: TRANSLATION_PROVIDER is an ordered
+// list, e.g. "telegram,google,lingva". Each claimed post goes to the first
+// provider that is available; a provider that is rate-limited, flood-waited
+// or unreachable is rested (for its flood-wait / Retry-After, or a few
+// minutes) and the posts move on to the next one, so one provider's limit no
+// longer stalls the whole backlog. A post one provider can't handle (e.g.
+// too long) is offered to the next as well.
+const LLM_PROVIDERS = new Set(['groq', 'openrouter', 'ollama', 'llm']);
+const REST_MS = Number(process.env.TRANSLATION_PROVIDER_REST_SECONDS || 300) * 1000;
+const restingUntil = new Map(); // provider -> timestamp
+const webGates = new Map();
+
+export function translationProviders(env = process.env) {
+  return String(env.TRANSLATION_PROVIDER || 'groq')
+    .split(',')
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export const translationRotation = {
+  resting: (name) => (restingUntil.get(name) || 0) > Date.now(),
+  rest(name, ms = REST_MS) {
+    restingUntil.set(name, Date.now() + ms);
+    console.warn(`[translation] ${name} unavailable — resting it for ${Math.round(ms / 1000)}s, using the next provider`);
+  },
+  reset: () => restingUntil.clear(),
+};
+
+function webGate(name) {
+  if (!webGates.has(name)) webGates.set(name, new RateGate(60_000 / WEB_TRANSLATOR_RATES[name]));
+  return webGates.get(name);
+}
+
+// Each runner translates what it can from `items` and returns
+// { done: Map(id -> {text, lang, model}), errors: Map(id -> message), restMs }
+// — restMs set when the provider itself is unavailable (the rest of the
+// items were not attempted).
+async function runTelegramProvider(items) {
+  const done = new Map();
+  const errors = new Map();
+  for (let i = 0; i < items.length; i += TRANSLATE_CHUNK_SIZE) {
+    const chunk = items.slice(i, i + TRANSLATE_CHUNK_SIZE);
+    try {
+      await telegramGate.wait();
+      const translated = await translateBatch(chunk.map((c) => c.raw_text));
+      chunk.forEach((item, j) => translated[j] && done.set(item.id, { text: translated[j], lang: null, model: 'telegram' }));
+    } catch (err) {
+      const flood = floodWaitSeconds(err);
+      if (flood) telegramGate.pauseFor(flood * 1000);
+      if (flood != null || isTelegramFloodWait(err.message) || !isTelegramAnswer(err)) {
+        return { done, errors, restMs: flood ? flood * 1000 : REST_MS };
+      }
+      for (const item of chunk) errors.set(item.id, `telegram: ${err.message}`);
+    }
+  }
+  return { done, errors, restMs: null };
+}
+
+async function runWebProvider(name, items) {
+  const done = new Map();
+  const errors = new Map();
+  for (const item of items) {
+    try {
+      await webGate(name).wait();
+      const r = await WEB_TRANSLATORS[name](item.raw_text);
+      if (r.text && r.text.trim()) done.set(item.id, { text: r.text.trim(), lang: r.lang, model: name });
+      else errors.set(item.id, `${name}: empty translation`);
+    } catch (err) {
+      if (err.systemic) return { done, errors, restMs: err.retryAfterMs || REST_MS };
+      errors.set(item.id, err.message);
+    }
+  }
+  return { done, errors, restMs: null };
+}
+
+async function runLLMProvider(name, items) {
+  const done = new Map();
+  const errors = new Map();
+  const providerName = name === 'llm' ? undefined : name;
+  for (const chunk of chunkForBatch(items)) {
+    try {
+      await llmGate.wait();
+      const { content, model } = await callLLM(buildBatchMessages(chunk), { providerName });
+      let got = new Map();
+      try {
+        got = parseBatchReply(content, chunk.length);
+      } catch {
+        // unusable reply: these posts move on to the next provider
+      }
+      chunk.forEach((item, idx) => {
+        const hit = got.get(idx + 1);
+        if (hit) done.set(item.id, { text: hit.en, lang: hit.lang, model });
+        else errors.set(item.id, `${name}: post missing from batch reply`);
+      });
+    } catch (err) {
+      if (isSystemicFailure(err.message) || /not configured|fetch failed|timeout|aborted/i.test(err.message)) {
+        return { done, errors, restMs: REST_MS };
+      }
+      for (const item of chunk) errors.set(item.id, `${name}: ${err.message}`);
+    }
+  }
+  return { done, errors, restMs: null };
+}
+
+function runProvider(name, items) {
+  if (name === 'telegram') return runTelegramProvider(items);
+  if (WEB_TRANSLATORS[name]) return runWebProvider(name, items);
+  if (LLM_PROVIDERS.has(name)) return runLLMProvider(name, items);
+  throw new Error(`Unknown TRANSLATION_PROVIDER "${name}" — use telegram, google, lingva, libretranslate, groq, openrouter or ollama`);
+}
+
+async function runRotation(claimed, providers) {
+  const results = [];
+  let pending = [];
+  for (const item of claimed) {
+    const skipped = await trySkip(item);
+    if (skipped) results.push(skipped);
+    else pending.push(item);
+  }
+  const errors = new Map();
+
+  for (const name of providers) {
+    if (pending.length === 0) break;
+    if (translationRotation.resting(name)) continue;
+    const r = await runProvider(name, pending);
+    for (const [id, t] of r.done) {
+      await commitTranslation(id, { sourceLanguage: t.lang, translatedText: t.text, model: t.model, status: 'done' });
+      results.push({ id, outcome: 'translated', provider: name });
+    }
+    for (const [id, msg] of r.errors) errors.set(id, msg);
+    pending = pending.filter((item) => !r.done.has(item.id));
+    if (r.restMs) translationRotation.rest(name, r.restMs);
+  }
+
+  // Left over: a post some provider rejected counts an attempt; a post that
+  // only met unavailable providers simply goes back to the queue.
+  for (const item of pending) {
+    const msg = errors.get(item.id);
+    if (msg) {
+      await pool.query(
+        `UPDATE raw_items SET status = 'failed_translation', translation_attempts = translation_attempts + 1, updated_at = now() WHERE id = $1`,
+        [item.id]
+      );
+      await upsertTranslation(pool, { id: item.id, status: 'failed', errorMessage: msg });
+      results.push({ id: item.id, outcome: 'failed', error: msg });
+    } else {
+      await revertToNew([item.id]);
+      results.push({ id: item.id, outcome: 'reverted' });
+    }
+  }
+  return results;
+}
+
 export async function runTranslationTick() {
-  const provider = (process.env.TRANSLATION_PROVIDER || 'groq').toLowerCase();
-  // While Telegram has translation flood-waited, don't claim anything — the
-  // posts stay queued (and visible in the feed) instead of sitting in
-  // 'translating' for the whole wait.
-  if (provider === 'telegram' && telegramGate.isPaused()) return [];
+  const providers = translationProviders();
+  const rotation = providers.length > 1 || providers.some((p) => WEB_TRANSLATORS[p]);
+  // While every provider is resting (or Telegram is flood-waited), don't
+  // claim anything — the posts stay queued (and visible in the feed)
+  // instead of sitting in 'translating' for the whole wait.
+  if (rotation && providers.every((p) => translationRotation.resting(p))) return [];
+  const provider = providers[0];
+  if (!rotation && provider === 'telegram' && telegramGate.isPaused()) return [];
 
   // Only items dedup has cleared: unique stories, and updates that carry new
   // information. Duplicates never reach this stage ('legacy' = rows that were
@@ -374,5 +532,6 @@ export async function runTranslationTick() {
 
   if (claimed.length === 0) return [];
 
+  if (rotation) return runRotation(claimed, providers);
   return provider === 'telegram' ? runTelegramBatch(claimed) : runLLMBatch(claimed);
 }

@@ -70,9 +70,17 @@ bot is an admin of the bot channel with "Post messages".
 - **Updates**: a report dedup marked as an *update* (new figures) is drafted
   with the new information as the lead.
 - **Cost**: when a post needs drafts for several channels, all of them are
-  written in **one** LLM call. `DRAFT_LLM_PROVIDER` picks the model
-  (`groq`, `openrouter`, or `ollama` for a free local model); with
-  `TRANSLATION_PROVIDER=telegram`, your whole Groq budget is left for drafting.
+  written in **one** LLM call. `DRAFT_LLM_PROVIDER` picks the provider
+  (`groq`, `openrouter`, or `ollama` for a free local model) and
+  `DRAFT_LLM_MODEL` the model(s). Groq's free daily limit is counted **per
+  model**, so list several: when one hits its daily limit it's set aside for
+  an hour and the next is used; unknown model ids are skipped. Keep
+  translation off Groq (`TRANSLATION_PROVIDER=telegram,google,lingva`) so the
+  whole budget goes to drafting.
+- **Volume**: at most `PUBLISH_MAX_PER_HOUR` (6) automatic drafts per channel
+  per hour (`maxPerHour` per channel), high priority first, newest first —
+  so the channel isn't flooded and the free budget lasts. Automatic drafts
+  that waited longer than `PUBLISH_MAX_AGE_MINUTES` are expired, not drafted.
 
 ## Modes
 

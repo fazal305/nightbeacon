@@ -21,11 +21,34 @@ function isSystemic(message) {
   );
 }
 
+// Automatic drafts for news that got too old while waiting (e.g. the LLM
+// was out of quota) are dropped instead of spending tokens on stale news.
+async function expireStaleRequests(config) {
+  await pool.query(
+    `UPDATE publications p SET status = 'expired', last_error = 'news too old by the time it could be drafted', updated_at = now()
+     FROM raw_items ri
+     WHERE p.raw_item_id = ri.id AND p.status = 'requested' AND p.origin = 'auto'
+       AND ri.telegram_date < now() - make_interval(mins => $1)`,
+    [config.maxAgeMinutes]
+  );
+}
+
+// At most channel.maxPerHour automatic drafts per channel per hour, so the
+// channel isn't flooded and the LLM's free allowance lasts: high priority
+// first, newest first.
 async function queueAutomaticDrafts(config) {
   if (config.mode === 'off') return 0;
   let queued = 0;
   for (const channel of config.channels) {
     if (channel.draftPriorities.length === 0) continue;
+    const { rows } = await pool.query(
+      `SELECT count(*)::int AS n FROM publications
+       WHERE channel_key = $1 AND origin = 'auto' AND created_at > now() - interval '1 hour'
+         AND NOT (status = 'rejected' AND last_error = 'model judged it not worth posting on this channel')`,
+      [channel.key]
+    );
+    const room = channel.maxPerHour - rows[0].n;
+    if (room <= 0) continue;
     const { rowCount } = await pool.query(
       `INSERT INTO publications (raw_item_id, story_id, channel_key, priority, origin, status)
        SELECT ri.id, ri.story_id, $3, ri.priority, 'auto', 'requested'
@@ -35,10 +58,10 @@ async function queueAutomaticDrafts(config) {
          AND ri.priority = ANY($1)
          AND ri.telegram_date >= now() - make_interval(mins => $2)
          AND NOT EXISTS (SELECT 1 FROM publications p WHERE p.raw_item_id = ri.id AND p.channel_key = $3)
-       ORDER BY ri.telegram_date DESC
-       LIMIT 50
+       ORDER BY CASE ri.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, ri.telegram_date DESC
+       LIMIT $4
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [channel.draftPriorities, config.maxAgeMinutes, channel.key]
+      [channel.draftPriorities, config.maxAgeMinutes, channel.key, room]
     );
     queued += rowCount;
   }
@@ -123,6 +146,7 @@ async function failPublications(pubs, message, systemic) {
 // `llm` and `styleFn` are injectable for tests.
 export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext } = {}) {
   const config = publishConfig();
+  await expireStaleRequests(config);
   await queueAutomaticDrafts(config);
   const groups = await claimRequested();
   if (groups.length === 0) return [];
@@ -154,6 +178,7 @@ export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext
       await gate.wait();
       const { content, model } = await llm(buildDraftMessages({ item, targets }), {
         providerName: config.draftProvider,
+        model: config.draftModel || undefined,
         temperature: 0.4,
       });
       let drafts;

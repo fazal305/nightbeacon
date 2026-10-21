@@ -198,3 +198,22 @@ observed in production: real-world latency numbers after the change, push
 delivery for joined channels, real flood-wait behaviour of the new pacing,
 and embedding thresholds on real multilingual traffic. Check the metrics
 panel after deploying.
+
+## Translation provider rotation
+
+`TRANSLATION_PROVIDER` may list several providers, e.g.
+`telegram,google,lingva,libretranslate`. Each claimed post goes to the first
+provider that isn't resting. A provider that is rate-limited (HTTP 429 /
+Telegram flood-wait), blocked (403), down (5xx) or unreachable is rested — for
+the flood-wait or `Retry-After` time, otherwise `TRANSLATION_PROVIDER_REST_SECONDS`
+(300) — and the remaining posts move on to the next. A post one provider rejects
+is offered to the next too; only a post every provider rejected counts a retry
+attempt. Posts that met only unavailable providers go back to the queue
+untouched. The worker log shows `"via google": n` etc. `npm run translate:check`
+tests each provider from your network.
+
+Web providers (`src/processing/webTranslate.js`): Google Translate's free web
+endpoint (`client=gtx`, no key, unofficial), [Lingva](https://github.com/thedaviddelta/lingva-translate)
+public instances (`LINGVA_URLS`), and self-hosted
+[LibreTranslate](https://github.com/LibreTranslate/LibreTranslate)
+(`LIBRETRANSLATE_URL`, fully offline, no limits).

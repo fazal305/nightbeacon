@@ -38,6 +38,7 @@ function startWorker(name, tick, { idleMs }) {
         if (results.length > 0) {
           const counts = {};
           for (const r of results) counts[r.outcome] = (counts[r.outcome] || 0) + 1;
+          for (const r of results) if (r.provider) counts[`via ${r.provider}`] = (counts[`via ${r.provider}`] || 0) + 1;
           console.log(`[${name}] ${results.length} item(s) — ${JSON.stringify(counts)}`);
         }
       } catch (err) {

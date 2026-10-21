@@ -18,6 +18,8 @@ import path from 'node:path';
 //   styleGuideFile   …or a text file with it (path relative to the channels
 //                    file), easier for long prompts; re-read when it changes
 //   styleExamples    how many recent channel posts to show the model (default 6)
+//   maxPerHour       automatic drafts per hour for this channel (default
+//                    PUBLISH_MAX_PER_HOUR, 6); the most important, newest win
 //   sourceCredit     "none" | "channel"
 //   parseMode        "none" | "html" | "markdown" (bot channels)
 //   enabled          false to pause a channel
@@ -81,6 +83,7 @@ export function normalizeChannels(rawChannels, defaults) {
       autoPriorities: delivery === 'bot' ? list(c.autoPriorities, defaults.autoPriorities) : [],
       styleGuide: c.styleGuide || '',
       styleExamples: Number(c.styleExamples ?? 6),
+      maxPerHour: Number(c.maxPerHour ?? defaults.maxPerHour),
       sourceCredit: (c.sourceCredit || defaults.sourceCredit).toLowerCase(),
       parseMode: (c.parseMode || defaults.parseMode).toLowerCase(),
     };
@@ -97,6 +100,7 @@ export function publishConfig(env = process.env) {
     autoPriorities: env.PUBLISH_AUTO_PRIORITIES || 'high',
     sourceCredit: env.PUBLISH_SOURCE_CREDIT || 'none',
     parseMode: env.PUBLISH_PARSE_MODE || 'none',
+    maxPerHour: Number(env.PUBLISH_MAX_PER_HOUR || 6),
   };
 
   const file = path.resolve(env.PUBLISH_CHANNELS_FILE || 'publish-channels.json');
@@ -135,6 +139,9 @@ export function publishConfig(env = process.env) {
     // posts you approve yourself are always sent.
     maxAgeMinutes: Number(env.PUBLISH_MAX_AGE_MINUTES || 120),
     draftProvider: (env.DRAFT_LLM_PROVIDER || env.LLM_PROVIDER || 'groq').toLowerCase(),
+    // One model id or a comma-separated list (each Groq model has its own
+    // daily allowance); empty = the provider's usual model env (GROQ_MODEL…).
+    draftModel: (env.DRAFT_LLM_MODEL || '').trim(),
     draftMaxPerMinute: Number(env.DRAFT_MAX_PER_MINUTE || 10),
   };
 }

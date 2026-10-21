@@ -110,6 +110,24 @@ test('review mode: one LLM call drafts every channel for a fresh high-priority s
   for (const id of [low, dup, stale]) assert.equal(await pubFor(id, 'main'), undefined);
 });
 
+test('hourly cap: at most maxPerHour automatic drafts per channel, high priority first; stale queued drafts expire', async () => {
+  setChannels([{ ...MAIN, draftPriorities: ['high', 'medium'], maxPerHour: 2 }]);
+  const medium = await readyItem({ priority: 'medium', minutesAgo: 1 });
+  const highOld = await readyItem({ minutesAgo: 30 });
+  const highNew = await readyItem({ minutesAgo: 10 });
+  const staleItem = await readyItem({ minutesAgo: 600 });
+  await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, origin, status, created_at)
+     VALUES ($1, 'main', 'auto', 'requested', now() - interval '2 hours')`,
+    [staleItem]
+  );
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  assert.equal((await pubFor(highNew)).status, 'draft');
+  assert.equal((await pubFor(highOld)).status, 'draft');
+  assert.equal(await pubFor(medium), undefined, 'over the cap: medium waits');
+  assert.equal((await pubFor(staleItem)).status, 'expired', 'not drafted after it went stale');
+});
+
 test('auto mode: bot-channel draft is approved and sent; manual channel stays a draft; SKIP is per channel', async () => {
   process.env.PUBLISH_MODE = 'auto';
   const item = await readyItem();
