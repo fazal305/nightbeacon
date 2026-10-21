@@ -239,3 +239,14 @@ Capacity: one account polls at most ~80 channels a minute
 (`POLL_INTER_SOURCE_DELAY_MS`, 750 ms). Busy channels are polled every
 minute, quiet ones back off to every 10 minutes, so ~1000 sources fit, with
 quiet channels a few minutes slower. Polling faster risks flood-waits.
+
+## Draining a large backlog
+
+`npm run translate:drain` (alongside the running server) translates the
+backlog in batches of up to 35 posts per request through the LLM providers
+(`--providers`, default `cerebras,mistral,openrouter,gemini,groq` — Groq and
+Gemini last because drafting needs them too). Posts are claimed exactly like
+the translation worker does, so the two never collide; posts a reply leaves
+out go back to the queue. A provider out of allowance is rested 10 minutes
+and the next takes over; when all are resting it waits. Stops when fewer
+than `--until` (100) are left, or after `--max-minutes`.

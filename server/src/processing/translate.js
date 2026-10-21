@@ -83,7 +83,7 @@ async function upsertTranslation(client, raw) {
   );
 }
 
-async function commitTranslation(id, translationRow) {
+export async function commitTranslation(id, translationRow) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -104,7 +104,7 @@ async function commitTranslation(id, translationRow) {
 // Skip logic is provider-agnostic — deterministic (detectLanguage.js), never
 // an LLM/Telegram call, per the project's "prefer deterministic rules"
 // principle. Shared by both translation paths below.
-async function trySkip(item) {
+export async function trySkip(item) {
   const english = looksLikeEnglish(item.raw_text);
   if (english === null) {
     // Media-only post, nothing to translate — not a failure, just nothing to do.
@@ -213,7 +213,7 @@ export function parseBatchReply(content, size) {
   return out;
 }
 
-async function revertToNew(ids) {
+export async function revertToNew(ids) {
   if (ids.length > 0) {
     await pool.query(`UPDATE raw_items SET status = 'new', updated_at = now() WHERE id = ANY($1)`, [ids]);
   }
