@@ -94,6 +94,16 @@ async function main() {
       const next = new Date(new Date(posted[posted.length - channel.maxPerHour].published_at).getTime() + 3600_000);
       info(`  hourly limit reached: next automatic post after ${next.toLocaleTimeString()}`);
     }
+    const { rows: queued } = await pool.query(
+      `SELECT id, status, origin, kind, attempts, last_error, approved_at, updated_at, score
+       FROM publications WHERE channel_key = $1 AND status IN ('approved', 'sending') ORDER BY approved_at`,
+      [channel.key]
+    );
+    for (const q of queued) {
+      const mins = Math.round((Date.now() - new Date(q.approved_at || q.updated_at).getTime()) / 60_000);
+      info(`  queued #${q.id}: ${q.status}, ${q.origin === 'manual' ? 'approved by you' : 'automatic'}${q.kind === 'digest' ? ' summary' : ''}, ` +
+        `waiting ${mins} min, ${q.attempts} failed attempt(s)${q.last_error ? ` — last error: ${q.last_error.slice(0, 140)}` : ''}`);
+    }
     const reviewing = queue.filter((q) => q.status === 'draft').reduce((n, q) => n + q.n, 0);
     if (reviewing) info(`  ${reviewing} draft(s) wait for your approval on the Publishing page (not posted automatically)`);
     const ready = queue.filter((q) => q.status === 'approved').reduce((n, q) => n + q.n, 0);
