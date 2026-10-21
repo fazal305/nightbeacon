@@ -4,6 +4,7 @@ import { looksLikeEnglish } from './detectLanguage.js';
 import { translateBatch, isTelegramFloodWait, TRANSLATE_CHUNK_SIZE } from './telegramTranslate.js';
 import { claimBatch } from '../pipeline/claim.js';
 import { RateGate } from '../pipeline/rateGate.js';
+import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.js';
 
 // Groq's free tier (default LLM provider, see llmClient.js) allows ~1000
 // requests/10min (~100/min sustained) and ~30k tokens/min — confirmed via
@@ -21,6 +22,11 @@ import { RateGate } from '../pipeline/rateGate.js';
 const BATCH_SIZE = Number(process.env.TRANSLATE_BATCH_SIZE || 20);
 const MAX_ATTEMPTS = 5;
 const llmGate = new RateGate(60_000 / Number(process.env.TRANSLATE_MAX_PER_MINUTE || 50));
+// Telegram publishes no limit for messages.translateText, so calls (each up to
+// TRANSLATE_CHUNK_SIZE posts) are spaced conservatively — 12/min = 240 posts/min
+// by default — and a flood-wait pauses this provider for its full duration
+// rather than being retried after the worker's generic 60s backoff.
+const telegramGate = new RateGate(60_000 / Number(process.env.TELEGRAM_TRANSLATE_CALLS_PER_MINUTE || 12));
 
 const LANG_CODE_RE = /^[a-z]{2,3}$/i;
 
@@ -191,6 +197,7 @@ async function runTelegramBatch(claimed) {
   for (let i = 0; i < toTranslate.length; i += TRANSLATE_CHUNK_SIZE) {
     const chunk = toTranslate.slice(i, i + TRANSLATE_CHUNK_SIZE);
     try {
+      await telegramGate.wait();
       const translated = await translateBatch(chunk.map((c) => c.raw_text));
       for (let j = 0; j < chunk.length; j++) {
         const item = chunk[j];
@@ -205,7 +212,11 @@ async function runTelegramBatch(claimed) {
         results.push({ id: item.id, outcome: 'translated' });
       }
     } catch (err) {
-      const systemic = isTelegramFloodWait(err.message);
+      // Flood-waits and "no answer at all" (proxy down, timeout) are not the
+      // posts' fault: put them back without spending their retry budget.
+      const flood = floodWaitSeconds(err);
+      if (flood) telegramGate.pauseFor(flood * 1000);
+      const systemic = flood != null || isTelegramFloodWait(err.message) || !isTelegramAnswer(err);
       for (const item of chunk) {
         if (systemic) {
           await pool.query(`UPDATE raw_items SET status = 'new', updated_at = now() WHERE id = $1`, [item.id]);
@@ -237,6 +248,12 @@ async function runTelegramBatch(claimed) {
 }
 
 export async function runTranslationTick() {
+  const provider = (process.env.TRANSLATION_PROVIDER || 'groq').toLowerCase();
+  // While Telegram has translation flood-waited, don't claim anything — the
+  // posts stay queued (and visible in the feed) instead of sitting in
+  // 'translating' for the whole wait.
+  if (provider === 'telegram' && telegramGate.isPaused()) return [];
+
   // Only items dedup has cleared: unique stories, and updates that carry new
   // information. Duplicates never reach this stage ('legacy' = rows that were
   // already past 'new' before dedup existed).
@@ -251,6 +268,5 @@ export async function runTranslationTick() {
 
   if (claimed.length === 0) return [];
 
-  const provider = (process.env.TRANSLATION_PROVIDER || 'groq').toLowerCase();
   return provider === 'telegram' ? runTelegramBatch(claimed) : runLLMBatch(claimed);
 }
