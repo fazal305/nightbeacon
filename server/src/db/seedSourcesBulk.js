@@ -10,16 +10,7 @@ import { pool } from './pool.js';
 import { getTelegramClient } from '../ingestion/telegramClient.js';
 import { Api } from 'telegram';
 
-const FOLDER_SLUGS = [
-  'C8Z7jlLBmaAxMjI0',
-  'GMqnOAC2iGdmYzI5',
-  'EFqQ6tg9E1U4N2M0',
-  'FpmHjPqRVaA1ZDg1',
-  'Zc3tjDDszXM3YTVk',
-  'nClKBSp2_IFhMzNk',
-  'vLHZ7uIX4_UwMWJk',
-  'PxPvtkVpX305YjE0',
-];
+import { FOLDER_SLUGS } from './chatFolders.js';
 
 const RELIABILITY_NOTE =
   'Added in bulk from an operator-provided Telegram chat-folder list (t.me/addlist). Not individually vetted — reliability/bias unverified per-source.';

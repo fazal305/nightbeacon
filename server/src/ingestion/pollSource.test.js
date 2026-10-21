@@ -8,9 +8,9 @@ import { pool } from '../db/pool.js';
 process.env.POLL_INTER_SOURCE_DELAY_MS = '0';
 process.env.TELEGRAM_RESOLVE_INTERVAL_MS = '0';
 process.env.TELEGRAM_REQUEST_TIMEOUT_MS = '300';
-const { pollSource, nextIntervalSeconds, POLL_BATCH_LIMIT } = await import('./pollSource.js');
+const { pollSource, nextIntervalSeconds, nextDueSource, POLL_BATCH_LIMIT } = await import('./pollSource.js');
 const { runBackfillStep } = await import('./backfill.js');
-const { requestGate } = await import('./telegramClient.js');
+const { requestGate, resolveGate } = await import('./telegramClient.js');
 const { handleNewMessage, _setSourceMapForTests } = await import('./liveUpdates.js');
 
 // Mirrors GramJS getMessages(peer, { minId, maxId, limit }) for a channel:
@@ -228,6 +228,33 @@ test('poll: a request that never returns (dead proxy) times out instead of freez
   assert.equal(rows[0].poll_error_count, 0, 'connectivity, not the channel\'s fault');
   requestGate.pausedUntil = 0;
   await dropSource(source.id);
+});
+
+test('a ResolveUsername flood-wait does not block polling: unresolved channel is put aside, resolved ones keep going', async () => {
+  const unresolved = await makeSource({ lastSeen: 5 });
+  await pool.query('UPDATE sources SET telegram_channel_id = NULL, telegram_access_hash = NULL, next_poll_at = NULL WHERE id = $1', [unresolved.id]);
+  unresolved.telegram_channel_id = null;
+  unresolved.telegram_access_hash = null;
+  resolveGate.pauseFor(3_600_000);
+  try {
+    const started = Date.now();
+    await assert.rejects(pollSource(unresolved, { tgClient: fakeTelegram([]) }), /username resolution paused/);
+    assert.ok(Date.now() - started < 2000, 'fails fast instead of sleeping through the flood-wait');
+    const { rows } = await pool.query(
+      `SELECT poll_error_count, extract(epoch FROM next_poll_at - now()) AS wait FROM sources WHERE id = $1`,
+      [unresolved.id]
+    );
+    assert.equal(rows[0].poll_error_count, 0);
+    assert.ok(Number(rows[0].wait) > 3000, 'rescheduled for when the flood-wait ends');
+    assert.equal(requestGate.isPaused(), false, 'other channels are not paused');
+
+    await pool.query('UPDATE sources SET next_poll_at = NULL WHERE id = $1', [unresolved.id]);
+    const next = await nextDueSource({ resolvedOnly: true });
+    assert.notEqual(next?.id, unresolved.id, 'scheduler skips unresolved channels while resolution is paused');
+  } finally {
+    resolveGate.pausedUntil = 0;
+    await dropSource(unresolved.id);
+  }
 });
 
 test('adaptive interval: active channels are polled at the minimum interval, quiet ones back off', () => {

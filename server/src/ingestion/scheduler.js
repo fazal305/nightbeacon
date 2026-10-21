@@ -1,5 +1,5 @@
 import { recordRun } from '../subsystems/recordRun.js';
-import { onTelegramClient, requestGate } from './telegramClient.js';
+import { onTelegramClient, requestGate, resolveGate } from './telegramClient.js';
 import { nextDueSource, pollSource } from './pollSource.js';
 import { runBackfillStep } from './backfill.js';
 import { startLiveUpdates } from './liveUpdates.js';
@@ -63,7 +63,7 @@ export function startIngestionScheduler() {
         }
 
         const forceBackfill = sinceBackfill >= BACKFILL_SHARE;
-        const source = forceBackfill ? null : await nextDueSource();
+        const source = forceBackfill ? null : await nextDueSource({ resolvedOnly: resolveGate.isPaused() });
         if (source) {
           sinceBackfill++;
           schedulerStats.polls++;

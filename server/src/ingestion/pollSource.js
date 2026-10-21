@@ -227,10 +227,14 @@ async function recordPollFailure(source, err) {
 // Picks the source whose turn it is: never-polled sources first, then the
 // most overdue. When there are more due sources than request budget, this
 // degrades to a fair round-robin by how long each has waited.
-export async function nextDueSource() {
+//
+// `resolvedOnly` (used while username resolution is flood-waited) skips
+// channels that would need contacts.ResolveUsername before they can be polled.
+export async function nextDueSource({ resolvedOnly = false } = {}) {
   const { rows } = await pool.query(
     `SELECT * FROM sources
      WHERE enabled AND (next_poll_at IS NULL OR next_poll_at <= now())
+       ${resolvedOnly ? 'AND telegram_access_hash IS NOT NULL' : ''}
      ORDER BY next_poll_at NULLS FIRST, last_poll_at NULLS FIRST
      LIMIT 1`
   );

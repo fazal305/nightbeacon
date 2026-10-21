@@ -110,6 +110,17 @@ seconds off, so keep the server clock synced (NTP — on by default on GCP
 VMs). A "proxy closed the connection during the TLS handshake" error almost
 always means a wrong secret or a skewed clock.
 
+## Channel ids and translation provider
+
+`npm run sources:backfill-ids` stores each source's Telegram channel id and
+access hash from the chat-folder previews (8 calls), so polling never needs
+`contacts.ResolveUsername` — the rate-limited call that flood-waits the account
+when hundreds of channels are resolved one by one. Run it after adding sources.
+
+`npm run telegram:check-translate` tries Telegram's built-in translation on
+your account. If it works, `TRANSLATION_PROVIDER=telegram` in `server/.env`
+removes Groq's ~200k-tokens/day free-tier cap (see ADR 0004).
+
 ## Telegram session (one-time, interactive)
 
 ```bash

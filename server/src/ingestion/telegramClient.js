@@ -259,6 +259,15 @@ export async function resolveSourcePeer(tgClient, source) {
     });
   }
 
+  // Never sleep through a ResolveUsername flood-wait here: polls run one at a
+  // time, so waiting would freeze polling of every channel (this is what
+  // stalled ingestion for hours after the access-hash column was added).
+  // Throwing with `seconds` makes the caller reschedule just this channel
+  // for when the wait ends, like any other flood-wait.
+  if (resolveGate.isPaused()) {
+    const seconds = Math.ceil((resolveGate.pausedUntil - Date.now()) / 1000);
+    throw Object.assign(new Error(`username resolution paused by a Telegram flood-wait (${seconds}s left)`), { seconds });
+  }
   await resolveGate.wait();
   telegramStats.resolves++;
   let peer;

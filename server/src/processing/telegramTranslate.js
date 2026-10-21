@@ -1,5 +1,5 @@
 import { Api } from 'telegram';
-import { getTelegramClient } from '../ingestion/telegramClient.js';
+import { getTelegramClient, withTimeout, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
 
 // Telegram doesn't document a per-call cap for messages.translateText's
 // text-array form (unlike the LLM providers, which publish req/min limits).
@@ -18,11 +18,15 @@ export function isTelegramFloodWait(message) {
 // MTProto call instead of one call per item.
 export async function translateBatch(texts) {
   const client = await getTelegramClient();
-  const response = await client.invoke(
-    new Api.messages.TranslateText({
-      text: texts.map((text) => new Api.TextWithEntities({ text, entities: [] })),
-      toLang: 'en',
-    })
+  const response = await withTimeout(
+    client.invoke(
+      new Api.messages.TranslateText({
+        text: texts.map((text) => new Api.TextWithEntities({ text, entities: [] })),
+        toLang: 'en',
+      })
+    ),
+    REQUEST_TIMEOUT_MS,
+    'translateText'
   );
   return response.result.map((t) => t.text);
 }
