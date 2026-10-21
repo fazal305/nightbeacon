@@ -22,7 +22,7 @@
 //   deepl           DeepL API Free, ~500k characters a month (DEEPL_API_KEY).
 //   cloudflare      Cloudflare Workers AI m2m100 translation model, free daily
 //                   allowance (CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN).
-//   huggingface     NLLB-200 on Hugging Face's free inference API (HF_TOKEN).
+//   huggingface     a chat model on Hugging Face's inference router (HF_TOKEN).
 //   nllb            Meta's NLLB-200 translation model running locally
 //                   (tools/nllb, NLLB_URL). Free, unlimited, offline; needs
 //                   the source language, guessed by guessNllbLanguage().
@@ -352,23 +352,25 @@ async function cloudflare(text) {
 }
 
 async function huggingface(text) {
-  const token = process.env.HF_TOKEN;
-  if (!token) throw providerError('huggingface', 'HF_TOKEN is not set', true, 3600_000);
-  const src = guessNllbLanguage(text);
-  if (!src) throw providerError('huggingface', 'could not tell the source language', false);
-  const url = process.env.HF_TRANSLATE_URL || 'https://router.huggingface.co/hf-inference/models/facebook/nllb-200-distilled-600M';
-  const parts = [];
-  for (const piece of splitText(text, 900)) {
-    const json = await request('huggingface', url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inputs: piece, parameters: { src_lang: src, tgt_lang: 'eng_Latn' } }),
-    });
-    const out = Array.isArray(json) ? json[0]?.translation_text : json?.translation_text;
-    if (typeof out !== 'string') throw providerError('huggingface', 'unexpected reply', true);
-    parts.push(out);
+  if (!process.env.HF_TOKEN) throw providerError('huggingface', 'HF_TOKEN is not set', true, 3600_000);
+  // Hugging Face no longer serves NLLB on its free router, so this uses a
+  // chat model there (HF_LLM_MODEL) with a plain translation instruction.
+  const { callLLM } = await import('./llmClient.js');
+  let content;
+  try {
+    ({ content } = await callLLM(
+      [
+        { role: 'system', content: 'Translate the user\'s text into fluent English. Keep every number, name and place exactly; keep line breaks. Reply with ONLY the translation.' },
+        { role: 'user', content: text },
+      ],
+      { providerName: 'huggingface', temperature: 0.1 }
+    ));
+  } catch (err) {
+    const status = Number(err.message.match(/\((\d{3})\)/)?.[1]);
+    throw providerError('huggingface', err.message.slice(0, 200), !status || status === 429 || status === 402 || status >= 500 || status === 401 || status === 403, status === 402 ? 6 * 3600_000 : null);
   }
-  return { text: parts.join(' '), lang: src.slice(0, 3) };
+  const lang = guessNllbLanguage(text);
+  return { text: content.trim(), lang: lang ? lang.slice(0, 3) : null };
 }
 
 async function nllb(text) {

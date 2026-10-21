@@ -96,6 +96,7 @@ Useful commands (in `server/`):
 | `npm run publish:check` | Posting status: config, queue, pace, next post time, bot admin rights |
 | `npm run translate:check` | Tests each translator / LLM key |
 | `npm run translate:drain` | Clears the translation backlog |
+| `npm run translate:skip-old` | Takes posts older than 48 h out of the translation queue (`-- --restore` undoes it) |
 | `npm run publish:drain` | Clears the queue of posts waiting to be drafted |
 | `npm run sources:list` | Lists monitored sources |
 | `npm run sources:discover` → `npm run sources:add` | Finds candidate channels (similar channels, folders, mentions), then adds the ones you keep |

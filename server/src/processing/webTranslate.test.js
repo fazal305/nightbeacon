@@ -81,9 +81,11 @@ test('mymemory, cloudflare, huggingface, nllb: language passed, quota and unknow
   assert.equal(JSON.parse(calls[0].init.body).source_lang, 'ru');
 
   process.env.HF_TOKEN = 'hf';
-  calls = fake(() => [200, [{ translation_text: 'Explosion' }]]);
-  assert.equal((await WEB_TRANSLATORS.huggingface('Терміново: вибух')).text, 'Explosion');
-  assert.equal(JSON.parse(calls[0].init.body).parameters.src_lang, 'ukr_Cyrl');
+  calls = fake(() => [200, { choices: [{ message: { content: 'Explosion' } }] }]);
+  assert.deepEqual(await WEB_TRANSLATORS.huggingface('Терміново: вибух'), { text: 'Explosion', lang: 'ukr' });
+  assert.match(calls[0].url, /router\.huggingface\.co\/v1\/chat\/completions/);
+  fake(() => [402, 'You have exceeded your monthly included credits']);
+  await assert.rejects(WEB_TRANSLATORS.huggingface('Терміново: вибух'), (err) => err.systemic);
 
   process.env.NLLB_URL = 'http://127.0.0.1:6060';
   calls = fake(() => [200, { text: 'Explosion in the port' }]);

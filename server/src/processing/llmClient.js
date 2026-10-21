@@ -24,7 +24,7 @@ const PROVIDERS = {
     url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
     apiKeyEnv: 'GEMINI_API_KEY',
     modelEnv: 'GEMINI_MODEL',
-    defaultModel: 'gemini-flash-latest,gemini-2.5-flash,gemini-2.0-flash',
+    defaultModel: 'gemini-flash-latest,gemini-flash-lite-latest,gemini-2.5-flash,gemini-2.5-flash-lite,gemini-2.0-flash',
     label: 'Gemini',
   },
   // Cerebras: free tier, very fast. Key at https://cloud.cerebras.ai
