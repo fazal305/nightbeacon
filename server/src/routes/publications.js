@@ -151,6 +151,8 @@ const ACTIONS = {
   save: { from: ['draft', 'approved'], to: null },
   // Bot channels only: queue for the bot.
   approve: { from: ['draft', 'failed', 'expired'], to: 'approved', delivery: 'bot' },
+  // A queued automatic post: send it with the next send, past the hourly limit.
+  post_now: { from: ['approved'], to: 'approved', delivery: 'bot' },
   // Manual channels: you copied and posted it yourself.
   mark_sent: { from: ['draft', 'approved', 'failed', 'expired'], to: 'sent_manually', delivery: 'manual' },
   reject: { from: ['requested', 'draft', 'approved', 'failed', 'expired'], to: 'rejected' },
@@ -161,7 +163,7 @@ publicationsRouter.patch('/:id', h(async (req, res) => {
   const id = Number(req.params.id);
   const parsed = z
     .object({
-      action: z.enum(['save', 'approve', 'mark_sent', 'reject', 'redraft']),
+      action: z.enum(['save', 'approve', 'post_now', 'mark_sent', 'reject', 'redraft']),
       text: z.string().trim().min(1).max(4096).optional(),
     })
     .safeParse(req.body);
@@ -186,11 +188,11 @@ publicationsRouter.patch('/:id', h(async (req, res) => {
     `UPDATE publications
      SET final_text = COALESCE($3, final_text),
          status = COALESCE($4, status),
-         origin = CASE WHEN $2 IN ('approve', 'mark_sent') THEN 'manual' ELSE origin END,
-         approved_at = CASE WHEN $2 = 'approve' THEN now() ELSE approved_at END,
+         origin = CASE WHEN $2 IN ('approve', 'post_now', 'mark_sent') THEN 'manual' ELSE origin END,
+         approved_at = CASE WHEN $2 = 'approve' THEN now() WHEN $2 = 'post_now' THEN now() - interval '1 day' ELSE approved_at END,
          published_at = CASE WHEN $2 = 'mark_sent' THEN now() ELSE published_at END,
-         attempts = CASE WHEN $2 IN ('approve', 'redraft') THEN 0 ELSE attempts END,
-         last_error = CASE WHEN $2 IN ('approve', 'redraft', 'mark_sent') THEN NULL ELSE last_error END,
+         attempts = CASE WHEN $2 IN ('approve', 'post_now', 'redraft') THEN 0 ELSE attempts END,
+         last_error = CASE WHEN $2 IN ('approve', 'post_now', 'redraft', 'mark_sent') THEN NULL ELSE last_error END,
          updated_at = now()
      WHERE id = $1 AND status = ANY($5)
      RETURNING *`,

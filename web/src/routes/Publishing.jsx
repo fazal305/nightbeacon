@@ -202,6 +202,7 @@ export function PublicationCard({ pub, t, compact = false }) {
           !digest && button('redraft', t('publishing.redraft')),
           button('reject', t('publishing.reject'), 'border-priority-high text-priority-high'),
         ]}
+        {pub.status === 'approved' && !manual && pub.origin !== 'manual' && button('post_now', t('publishing.postNow'), 'border-accent text-accent hover:bg-accent/10')}
         {pub.status === 'approved' && [button('save', saved ? t('publishing.saved') : t('publishing.save'), dirty ? 'border-accent text-accent' : undefined, !dirty), button('reject', t('publishing.reject'), 'border-priority-high text-priority-high')]}
         {['failed', 'expired'].includes(pub.status) && [
           manual

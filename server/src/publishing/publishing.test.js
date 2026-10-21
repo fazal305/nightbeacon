@@ -485,6 +485,36 @@ test('digest: posted once per slot, auto-approved on the bot channel, skipped wh
   }
 });
 
+test('API + sender: "post now" sends a queued automatic post past the hourly limit, first in line', async () => {
+  setChannels([{ ...MAIN, maxPerHour: 1, minGapMinutes: 0 }, ALERTS]);
+  const done = await readyItem();
+  const waiting = await readyItem();
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, published_at) VALUES ($1, 'main', 'published', 'auto', 'x', now())`, [done]);
+  const { rows: [q] } = await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at, score) VALUES ($1, 'main', 'approved', 'auto', 'queued', now(), 5) RETURNING id`,
+    [waiting]
+  );
+  let sent = [];
+  const send = async (t) => (sent.push(t), { messageId: 1 });
+  await runPublishingTick({ send, loadMedia: async () => [] });
+  assert.deepEqual(sent, [], 'hourly limit holds the automatic post');
+
+  const app = express();
+  app.use(express.json());
+  app.use('/api/publications', publicationsRouter);
+  const server = app.listen(0);
+  try {
+    const r = await fetch(`http://localhost:${server.address().port}/api/publications/${q.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'post_now' }),
+    });
+    assert.equal(r.status, 200);
+  } finally {
+    server.close();
+  }
+  await runPublishingTick({ send, loadMedia: async () => [] });
+  assert.deepEqual(sent, ['queued']);
+});
+
 test('sender: a real Telegram error (bot not admin) fails the post after 3 attempts', async () => {
   const item = await readyItem();
   await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 't', now())`, [item]);
