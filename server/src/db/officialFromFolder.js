@@ -29,10 +29,12 @@ const ORGANISATIONS = [
   ['Abu Ali Mustafa Brigades', ['أبو علي مصطفى', 'ابو علي مصطفى', 'abu ali mustafa']],
   ['PFLP', ['الجبهة الشعبية', 'pflp']],
   ['Hamas', ['حماس', 'hamas']],
-  ['Yemeni Armed Forces', ['القوات المسلحة اليمنية', 'yemeni armed forces']],
+  ['Yemeni Armed Forces', ['القوات المسلحة اليمنية', 'القوات المسلحة اليمني', 'الإعلام الحربي اليمني', 'يحيى سريع', 'yemeni armed forces', 'military media y']],
   ['Ansarallah', ['أنصار الله', 'انصار الله', 'ansarallah', 'ansar allah']],
   ['IRGC', ['سپاه', 'الحرس الثوري', 'irgc', 'sepah', 'revolutionary guard']],
-  ['Hezbollah', ['حزب الله', 'المقاومة الإسلامية في لبنان', 'المقاومة الاسلامية في لبنان', 'الإعلام الحربي', 'hezbollah', 'hizbollah', 'hizbullah', 'islamic resistance in lebanon']],
+  // "الإعلام الحربي" (war media) is used by many groups; only Hezbollah's own
+  // channel pairs it with "المقاومة الإسلامية" and no other group name.
+  ['Hezbollah', ['حزب الله', 'المقاومة الإسلامية في لبنان', 'المقاومة الاسلامية في لبنان', 'الإعلام الحربي في المقاومة الإسلامية', 'hezbollah', 'hizbollah', 'hizbullah', 'islamic resistance in lebanon']],
 ];
 
 export function guessOrganisation(title) {

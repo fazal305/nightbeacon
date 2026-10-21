@@ -4,12 +4,15 @@ import { guessOrganisation, mergeIntoFile } from './officialFromFolder.js';
 import { parseTerminology } from '../publishing/config.js';
 
 test('official folder: organisation guessed from the channel title, most specific first', () => {
-  assert.equal(guessOrganisation('الإعلام الحربي - المقاومة الإسلامية'), 'Hezbollah');
   assert.equal(guessOrganisation('كتائب حزب الله'), "Kata'ib Hezbollah");
   assert.equal(guessOrganisation('كتائب القسام'), 'Al-Qassam Brigades');
   assert.equal(guessOrganisation('Saraya Al-Quds official'), 'Saraya al-Quds');
   assert.equal(guessOrganisation('Yemeni Armed Forces'), 'Yemeni Armed Forces');
   assert.equal(guessOrganisation('Some other channel'), null);
+  assert.equal(guessOrganisation('الإعلام الحربي في المقاومة الإسلامية'), 'Hezbollah');
+  assert.equal(guessOrganisation('الإعلام الحربي اليمني | M M Y'), 'Yemeni Armed Forces');
+  assert.equal(guessOrganisation('قناة المتحدث الرسمي للقوات المسلحة اليمنية العميد يحيى سريع'), 'Yemeni Armed Forces');
+  assert.equal(guessOrganisation('كتيبة طولكرم الإعلام الحربي-الحساب الاحتياطي'), null, 'not Hezbollah');
 });
 
 test('official folder: re-running replaces only its own block; hand-written lines are kept', () => {

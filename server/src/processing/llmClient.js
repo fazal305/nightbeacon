@@ -82,6 +82,10 @@ export async function callLLM(
       if (err.dailyLimit) {
         modelBlockedUntil.set(key, Date.now() + DAILY_LIMIT_COOLDOWN_MS);
         if (models.length > 1) console.warn(`[llm] ${model} reached its daily limit — using the next model for an hour`);
+      } else if (err.status === 413) {
+        // This request is bigger than the model's per-minute token limit
+        // (e.g. 8k TPM): no point waiting, a model with a larger limit may take it.
+        if (models.length > 1) console.warn(`[llm] request too large for ${model} — trying the next model`);
       } else if (err.status === 404 || /decommissioned|model_not_found|does not exist/i.test(err.message)) {
         modelBlockedUntil.set(key, Infinity);
         console.warn(`[llm] model "${model}" is not available on ${provider.label} — skipping it`);

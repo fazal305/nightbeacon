@@ -35,6 +35,15 @@ test('llm: a model at its daily limit is skipped for the next one, and stays ski
   assert.deepEqual(calls, ['tired-a', 'fresh-b', 'fresh-b'], 'exhausted model not retried within the hour');
 });
 
+test('llm: a request too large for one model\'s per-minute limit goes to the next model', async () => {
+  process.env.GROQ_API_KEY = 'k';
+  const calls = fakeFetch((model) => (model === 'small-tpm' ? [413, 'Request too large ... tokens per minute (TPM): Limit 8000'] : answer('ok')));
+  const r = await callLLM([], { providerName: 'groq', model: 'small-tpm,big-tpm' });
+  assert.equal(r.model, 'big-tpm');
+  await callLLM([], { providerName: 'groq', model: 'small-tpm,big-tpm' });
+  assert.deepEqual(calls, ['small-tpm', 'big-tpm', 'small-tpm', 'big-tpm'], 'not set aside: smaller requests still fit');
+});
+
 test('llm: unknown models are skipped; a per-minute 429 is not treated as daily; all exhausted -> rate limit error', async () => {
   process.env.GROQ_API_KEY = 'k';
   fakeFetch((model) => (model === 'gone-x' ? [404, 'model_not_found'] : [429, 'rate limit tokens per minute (TPM)']));
