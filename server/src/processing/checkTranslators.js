@@ -8,12 +8,16 @@ import { translateBatch } from './telegramTranslate.js';
 import { callLLM } from './llmClient.js';
 
 const SAMPLE = 'عاجل: انفجار في الميناء وإصابة 12 شخصا';
+const llm = (providerName) => async () =>
+  ({ text: (await callLLM([{ role: 'user', content: `Translate to English, reply with the translation only: ${SAMPLE}` }], { providerName })).content });
 const checks = {
   telegram: async () => ({ text: (await translateBatch([SAMPLE]))[0] }),
-  google: () => WEB_TRANSLATORS.google(SAMPLE),
-  lingva: () => WEB_TRANSLATORS.lingva(SAMPLE),
-  libretranslate: () => WEB_TRANSLATORS.libretranslate(SAMPLE),
-  groq: async () => ({ text: (await callLLM([{ role: 'user', content: `Translate to English: ${SAMPLE}` }], { providerName: 'groq' })).content }),
+  ...Object.fromEntries(Object.entries(WEB_TRANSLATORS).map(([name, fn]) => [name, () => fn(SAMPLE)])),
+  gemini: llm('gemini'),
+  cerebras: llm('cerebras'),
+  mistral: llm('mistral'),
+  openrouter: llm('openrouter'),
+  groq: llm('groq'),
 };
 
 const working = [];
@@ -27,8 +31,10 @@ for (const [name, run] of Object.entries(checks)) {
     console.log(`  --   ${name.padEnd(15)} ${String(err.message).slice(0, 110)}`);
   }
 }
-// Groq is best kept for drafting posts; list it last if at all.
-const order = ['telegram', 'google', 'lingva', 'libretranslate', 'groq'];
-const line = order.filter((n) => working.includes(n) && n !== 'groq');
+// Free translators first, local ones next, LLMs (whose allowance drafting
+// also needs) last; Groq is left out — keep it for writing posts.
+const order = ['telegram', 'google', 'bing', 'yandex', 'microsoft', 'deepl', 'lingva', 'cloudflare', 'nllb', 'libretranslate',
+  'huggingface', 'mymemory', 'cerebras', 'mistral', 'gemini', 'openrouter'];
+const line = order.filter((n) => working.includes(n));
 console.log(line.length ? `\nPut this in server/.env:\nTRANSLATION_PROVIDER=${line.join(',')}` : '\nNo free translator worked from this network.');
 setTimeout(() => process.exit(0), 300);

@@ -27,6 +27,22 @@ const PROVIDERS = {
     defaultModel: 'gemini-flash-latest,gemini-2.5-flash,gemini-2.0-flash',
     label: 'Gemini',
   },
+  // Cerebras: free tier, very fast. Key at https://cloud.cerebras.ai
+  cerebras: {
+    url: 'https://api.cerebras.ai/v1/chat/completions',
+    apiKeyEnv: 'CEREBRAS_API_KEY',
+    modelEnv: 'CEREBRAS_MODEL',
+    defaultModel: 'llama-3.3-70b,llama3.1-8b',
+    label: 'Cerebras',
+  },
+  // Mistral: free "Experiment" plan. Key at https://console.mistral.ai
+  mistral: {
+    url: 'https://api.mistral.ai/v1/chat/completions',
+    apiKeyEnv: 'MISTRAL_API_KEY',
+    modelEnv: 'MISTRAL_MODEL',
+    defaultModel: 'mistral-small-latest,open-mistral-nemo',
+    label: 'Mistral',
+  },
   // Local, free, no API key: Ollama's OpenAI-compatible endpoint
   // (`ollama pull qwen2.5:7b`, then OLLAMA_MODEL=qwen2.5:7b).
   ollama: {

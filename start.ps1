@@ -35,6 +35,14 @@ if (Test-Port 5000) {
   Write-Host "LibreTranslate not found at $libreExe - skipping (optional)."
 }
 
+$nllbPy = Join-Path $root 'tools\nllb\venv\Scripts\python.exe'
+if (Test-Port 6060) {
+  Write-Host 'NLLB translator is already running.'
+} elseif ((Test-Path $nllbPy) -and (Test-Path (Join-Path $root 'tools\nllb\model\model.bin'))) {
+  Write-Host 'Starting NLLB translator...'
+  Start-Window 'Nightbeacon - NLLB' (Join-Path $root 'tools\nllb') "& '$nllbPy' server.py"
+}
+
 Write-Host 'Starting server (it also starts PostgreSQL)...'
 Start-Window 'Nightbeacon - server' (Join-Path $root 'server') 'npm run dev'
 
