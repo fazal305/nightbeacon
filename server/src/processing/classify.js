@@ -2,6 +2,7 @@ import { pool } from '../db/pool.js';
 import { classify } from './classificationRules.js';
 import { classifyWithJev, isJevRateLimit } from './jevClassify.js';
 import { claimBatch } from '../pipeline/claim.js';
+import { higherPriority } from './triage.js';
 
 // The rule-based classifier is pure CPU and takes well under a millisecond
 // per item; the old 20-per-minute cap made this stage a backlog of its own
@@ -30,7 +31,10 @@ async function processItemRule(item) {
     // analyst — and these English keyword lists — can actually match against);
     // fall back to the original text if translation was skipped/unavailable.
     const textToClassify = item.translated_text || item.raw_text;
-    const { category, priority, tags } = classify(textToClassify);
+    const { category, priority: english, tags } = classify(textToClassify);
+    // The guess from the original text (triage.js) can only raise it: a
+    // keyword the translation phrased differently shouldn't lose a story.
+    const priority = item.triage_priority ? higherPriority(english, item.triage_priority) : english;
 
     await client.query('BEGIN');
 
@@ -104,7 +108,7 @@ export async function runClassificationTick() {
     eligibleParams: [MAX_ATTEMPTS],
     claimStatus: 'tagging',
     limit: BATCH_SIZE,
-    returning: `id, raw_text, telegram_date,
+    returning: `id, raw_text, telegram_date, triage_priority,
        (SELECT translated_text FROM translations t WHERE t.raw_item_id = raw_items.id) AS translated_text`,
   });
 

@@ -3,6 +3,7 @@ import { callLLM } from './llmClient.js';
 import { looksLikeEnglish } from './detectLanguage.js';
 import { translateBatch, isTelegramFloodWait, TRANSLATE_CHUNK_SIZE } from './telegramTranslate.js';
 import { claimBatch } from '../pipeline/claim.js';
+import { triageBatch, requeueCorroborated } from './triage.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.js';
 import { WEB_TRANSLATORS, WEB_TRANSLATOR_RATES, looksDegenerate } from './webTranslate.js';
@@ -532,8 +533,17 @@ export async function runTranslationTick() {
     returning: 'id, raw_text, telegram_date',
   });
 
+  await requeueCorroborated();
   if (claimed.length === 0) return [];
 
-  if (rotation) return runRotation(claimed, providers);
-  return provider === 'telegram' ? runTelegramBatch(claimed) : runLLMBatch(claimed);
+  // Classify first: only posts that clear TRANSLATE_MIN_PRIORITY are translated.
+  const { translate, skipped } = await triageBatch(claimed);
+  const below = skipped.map((i) => ({ id: i.id, outcome: 'below-priority-bar' }));
+  if (translate.length === 0) return below;
+  const results = rotation
+    ? await runRotation(translate, providers)
+    : provider === 'telegram'
+      ? await runTelegramBatch(translate)
+      : await runLLMBatch(translate);
+  return [...results, ...below];
 }

@@ -8,3 +8,7 @@
 import dotenv from 'dotenv';
 
 dotenv.config({ path: new URL('../.env.test', import.meta.url) });
+
+// Translation tests translate every post unless they test the priority bar
+// (triage.js) themselves.
+process.env.TRANSLATE_MIN_PRIORITY ??= 'off';

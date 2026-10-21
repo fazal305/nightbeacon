@@ -24,6 +24,7 @@ import { callLLM, isProviderUnavailable } from './llmClient.js';
 import { claimBatch } from '../pipeline/claim.js';
 import { chunkForBatch, commitTranslation, trySkip, revertToNew, runProvider, LLM_PROVIDERS } from './translate.js';
 import { sleep } from '../pipeline/rateGate.js';
+import { triageBatch } from './triage.js';
 
 const LLM_BATCH = Number(process.env.DRAIN_BATCH || 35);
 const LLM_BATCH_MAX_CHARS = Number(process.env.DRAIN_BATCH_MAX_CHARS || 12000);
@@ -128,8 +129,10 @@ async function providerLoop(provider, ctx) {
       await wait(30_000, ctx);
       continue;
     }
-    const posts = [];
-    for (const item of claimed) if (!(await trySkip(item))) posts.push(item);
+    const kept = [];
+    for (const item of claimed) if (!(await trySkip(item))) kept.push(item);
+    // Same priority bar as the translation worker.
+    const { translate: posts } = await triageBatch(kept);
     if (posts.length === 0) continue;
 
     const r = await translateWith(provider, posts);

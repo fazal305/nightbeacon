@@ -11,8 +11,8 @@ ready-to-copy drafts for the rest.
 ## How it works
 
 ```
-~1000 source channels ─► poll ─► dedup into stories ─► translate ─► classify
-                                                                      │
+~1000 source channels ─► poll ─► dedup ─► priority guess ─► translate ─► classify
+                                            (below bar: feed only)          │
           your channels ◄── bot posts / manual drafts ◄── score + draft
 ```
 
@@ -27,11 +27,17 @@ ready-to-copy drafts for the rest.
 2. **Dedup before translation** — exact, fuzzy and optional cross-language
    semantic matching group relays of the same report into one *story*;
    reports that add new figures are kept as story updates.
-3. **Translation** — a rotation of free translators and LLMs (below). A
+3. **Classify first** — the original text gets a priority guess from keyword
+   lists in Arabic, Persian, Russian, Ukrainian, Hebrew, Turkish, Urdu and
+   English. Only posts at or above `TRANSLATE_MIN_PRIORITY` (default
+   `medium`) are translated, plus English posts, official channels and stories
+   3+ channels report. The rest go to the feed untranslated (`off` translates
+   everything).
+4. **Translation** — a rotation of free translators and LLMs (below). A
    provider that runs out of quota or misbehaves rests and the next one takes
    over, so translation (and therefore posting) never stops.
-4. **Classification** — rule-based category, priority and tags.
-5. **Publishing** — stories are scored, the best are drafted in each channel's
+5. **Classification** — rule-based category, priority and tags.
+6. **Publishing** — stories are scored, the best are drafted in each channel's
    style, and sent at a safe pace (see [Publishing](#publishing)).
 
 ## Publishing

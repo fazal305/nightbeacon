@@ -58,6 +58,17 @@ async function main() {
   );
   const oldestH = queue.oldest ? Math.round((Date.now() - new Date(queue.oldest).getTime()) / 3600_000) : 0;
   info(`translation queue: ${queue.n} waiting in total (${queue.fresh} from the last 2 hours${queue.n ? `, oldest ${oldestH} h old` : ''})`);
+  const { rows: [tri] } = await pool.query(
+    `SELECT count(*) FILTER (WHERE translation_skipped)::int AS skipped,
+            count(*) FILTER (WHERE triage_priority IS NOT NULL AND NOT translation_skipped)::int AS passed
+     FROM raw_items WHERE telegram_date >= now() - interval '2 hours'`
+  );
+  const bar = String(process.env.TRANSLATE_MIN_PRIORITY || 'medium').toLowerCase();
+  info(
+    bar === 'off'
+      ? 'priority bar off (TRANSLATE_MIN_PRIORITY=off): every post is translated'
+      : `classified before translation (bar: ${bar}) — last 2 hours: ${tri.passed} translated, ${tri.skipped} below the bar kept untranslated`
+  );
   if (queue.fresh > 200) bad('translation is behind on fresh news — see TRANSLATION_PROVIDER in docs/PIPELINE.md');
 
   console.log('\n3. Publications');
