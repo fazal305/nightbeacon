@@ -1,4 +1,5 @@
 import { recordRun } from '../subsystems/recordRun.js';
+import { startProxyMaintenance } from './proxyMaintenance.js';
 import { onTelegramClient, requestGate, resolveGate } from './telegramClient.js';
 import { nextDueSource, pollSource } from './pollSource.js';
 import { runBackfillStep } from './backfill.js';
@@ -32,6 +33,7 @@ export const schedulerStats = {
 
 export function startIngestionScheduler() {
   schedulerStats.startedAt = new Date().toISOString();
+  startProxyMaintenance();
   let pending = [];
   let lastFlush = Date.now();
   let sinceBackfill = 0;

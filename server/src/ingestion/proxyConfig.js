@@ -140,6 +140,13 @@ export function buildProxyCandidates(env = process.env, { readFile = (f) => fs.r
 
   const links = splitProxyLinks(env.TELEGRAM_PROXY_LINKS);
   if (env.TELEGRAM_PROXY_LINKS_FILE) links.push(...splitProxyLinks(readFile(env.TELEGRAM_PROXY_LINKS_FILE)));
+  // Links found automatically (proxyPool.js) — after the ones you configured.
+  const found = env.TELEGRAM_PROXY_FOUND_FILE || 'proxies-found.txt';
+  try {
+    links.push(...splitProxyLinks(readFile(found)));
+  } catch {
+    // none found yet
+  }
 
   const seen = new Set(candidates.map(routeKey));
   for (const link of links) {
@@ -156,6 +163,7 @@ export function buildProxyCandidates(env = process.env, { readFile = (f) => fs.r
   return candidates.length > 0 ? candidates : [undefined];
 }
 
-function routeKey(p) {
+export function routeKey(p) {
+  if (!p) return 'direct';
   return `${p.ip}:${p.port}:${p.secret || ''}:${p.fakeTlsDomain || ''}:${p.username || ''}`;
 }

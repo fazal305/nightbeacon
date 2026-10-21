@@ -4,7 +4,8 @@ import { Logger, LogLevel } from 'telegram/extensions/Logger.js';
 import { UpdateConnectionState } from 'telegram/network/index.js';
 import { returnBigInt } from 'telegram/Helpers.js';
 import { pool } from '../db/pool.js';
-import { buildProxyCandidates, describeProxy } from './proxyConfig.js';
+import { buildProxyCandidates, describeProxy, routeKey } from './proxyConfig.js';
+import { rankRoutes } from './proxyPool.js';
 import { applyProxyTransport } from './fakeTlsConnection.js';
 import { RateGate } from '../pipeline/rateGate.js';
 
@@ -67,9 +68,73 @@ let candidateIndex = 0;
 let consecutiveConnectivityFailures = 0;
 const clientHooks = [];
 
+let activeProxy = null;
+
 function routes() {
-  if (!candidates) candidates = buildProxyCandidates();
+  if (!candidates) {
+    candidates = rankRoutes(buildProxyCandidates());
+    // Keep pointing at the route in use after the list is rebuilt.
+    const i = activeProxy ? candidates.findIndex((p) => routeKey(p) === routeKey(activeProxy)) : -1;
+    candidateIndex = i > -1 ? i : 0;
+  }
   return candidates;
+}
+
+// Re-reads the configured + found proxy links, fastest first (after new
+// links were found, or new speed measurements came in).
+export function reloadRoutes() {
+  candidates = null;
+  return routes();
+}
+
+export function currentProxy() {
+  return client ? activeProxy : null;
+}
+
+function activate(c, proxy, idx) {
+  candidateIndex = idx;
+  activeProxy = proxy;
+  consecutiveConnectivityFailures = 0;
+  client = c;
+  trackConnectionState(c);
+  telegramStats.connected = true;
+  telegramStats.connects++;
+  telegramStats.activeRoute = describeProxy(proxy);
+  telegramStats.lastStateChangeAt = new Date().toISOString();
+  for (const cb of clientHooks) {
+    Promise.resolve(cb(c)).catch((err) => console.error('[telegram] client hook failed:', err.message));
+  }
+}
+
+// Moves to a (faster) route without interrupting work: the new connection is
+// proven first, and the old one is closed a little later so requests already
+// running on it can finish. Returns false (and keeps the current route) if
+// the new one doesn't work.
+export async function switchRoute(proxy) {
+  if (connecting || !client) return false;
+  const apiId = Number(process.env.TELEGRAM_API_ID);
+  const apiHash = process.env.TELEGRAM_API_HASH;
+  const sessionString = process.env.TELEGRAM_SESSION;
+  const started = Date.now();
+  let c;
+  try {
+    c = await connectRoute(proxy, { apiId, apiHash, sessionString, multipleRoutes: true });
+  } catch (err) {
+    console.warn(`[telegram] faster route ${describeProxy(proxy)} did not work (${err.message}) — staying`);
+    return false;
+  }
+  if (!client || connecting) {
+    c.destroy().catch(() => {});
+    return false;
+  }
+  const old = client;
+  const from = telegramStats.activeRoute;
+  const list = routes();
+  const idx = list.findIndex((p) => routeKey(p) === routeKey(proxy));
+  activate(c, proxy, idx > -1 ? idx : candidateIndex);
+  console.log(`[telegram] switched from ${from} to faster ${describeProxy(proxy)} (connected in ${Date.now() - started} ms)`);
+  setTimeout(() => old.destroy().catch(() => {}), 30_000).unref?.();
+  return true;
 }
 
 // Connects through one route and proves it with a real request: GramJS's
@@ -158,18 +223,8 @@ export async function getTelegramClient() {
       const started = Date.now();
       try {
         const c = await connectRoute(proxy, { apiId, apiHash, sessionString, multipleRoutes: list.length > 1 });
-        candidateIndex = idx;
-        consecutiveConnectivityFailures = 0;
-        client = c;
-        trackConnectionState(c);
-        telegramStats.connected = true;
-        telegramStats.connects++;
-        telegramStats.activeRoute = label;
-        telegramStats.lastStateChangeAt = new Date().toISOString();
         console.log(`[telegram] connected via ${label} in ${Date.now() - started} ms`);
-        for (const cb of clientHooks) {
-          Promise.resolve(cb(c)).catch((err) => console.error('[telegram] client hook failed:', err.message));
-        }
+        activate(c, proxy, idx);
         return c;
       } catch (err) {
         failures.push(`${label}: ${err.message}`);
@@ -206,6 +261,7 @@ export function reportConnectivityFailure() {
   telegramStats.failovers = (telegramStats.failovers || 0) + 1;
   telegramStats.connected = false;
   telegramStats.activeRoute = null;
+  activeProxy = null;
   console.warn(`[telegram] ${FAILOVER_AFTER} requests in a row got no answer via ${label} — switching route`);
   dead.destroy().catch(() => {});
 }
@@ -214,6 +270,7 @@ export function _setConnectRouteForTests(fn, routeList) {
   connectRoute = fn || defaultConnectRoute;
   candidates = routeList ?? null;
   candidateIndex = 0;
+  activeProxy = null;
   consecutiveConnectivityFailures = 0;
   client = null;
   clientHooks.length = 0;

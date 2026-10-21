@@ -7,6 +7,7 @@ import { returnBigInt } from 'telegram/Helpers.js';
 import { CustomFile } from 'telegram/client/uploads.js';
 import { buildProxyCandidates, describeProxy } from '../ingestion/proxyConfig.js';
 import { applyProxyTransport } from '../ingestion/fakeTlsConnection.js';
+import { rankRoutes } from '../ingestion/proxyPool.js';
 import { withTimeout, isTelegramAnswer, floodWaitSeconds, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
 import { CAPTION_LIMIT, uploadAttributes } from './media.js';
 import { getState, setState } from '../db/appState.js';
@@ -36,7 +37,7 @@ export async function getBotClient(config) {
 
     const sessionKey = `bot_session:${tokenKey(config.botToken)}`;
     const saved = (await getState(sessionKey))?.value || '';
-    const routes = buildProxyCandidates();
+    const routes = rankRoutes(buildProxyCandidates());
     const failures = [];
     for (let i = 0; i < routes.length; i++) {
       const idx = (routeIndex + i) % routes.length;

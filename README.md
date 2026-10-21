@@ -16,10 +16,14 @@ ready-to-copy drafts for the rest.
           your channels ◄── bot posts / manual drafts ◄── score + draft
 ```
 
-1. **Ingestion** — GramJS (MTProto, optionally through an MTProxy) polls the
+1. **Ingestion** — GramJS (MTProto, through MTProxies with automatic
+   failover) polls the
    sources with flood-wait-safe pacing, backfills gaps and receives push
    updates for joined channels. A newly added source only contributes its
    last hour, so additions don't flood the queue.
+   Every 10 minutes the proxies are speed-tested: the connection moves to a
+   clearly faster one, and when fewer than 3 answer, new links are fetched
+   from @mtpro_xyz_bot (`PROXY_BOT`) and saved to `server/proxies-found.txt`.
 2. **Dedup before translation** — exact, fuzzy and optional cross-language
    semantic matching group relays of the same report into one *story*;
    reports that add new figures are kept as story updates.
