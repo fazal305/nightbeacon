@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import 'dotenv/config';
 
 import { pool } from './db/pool.js';
+import { describeError, connectionHint } from './db/describeError.js';
 import { authRouter } from './routes/auth.js';
 import { itemsRouter } from './routes/items.js';
 import { sourcesRouter } from './routes/sources.js';
@@ -32,7 +33,15 @@ export function createApp() {
   app.use(express.json({ limit: '100kb' }));
   app.use(
     session({
-      store: new PgSession({ pool, tableName: 'session' }),
+      store: new PgSession({
+        pool,
+        tableName: 'session',
+        // While the database is down, startup already explains why; don't
+        // also dump a stack trace for every session prune/lookup.
+        errorLog: (err) => {
+          if (!connectionHint(err)) console.error('[session]', describeError(err));
+        },
+      }),
       secret: process.env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
