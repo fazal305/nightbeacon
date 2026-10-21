@@ -130,18 +130,23 @@ async function sendWithMedia(client, peer, text, media, parseMode) {
   return { messageId: message.id, mediaCount: media.length };
 }
 
-// `media`: files from loadItemMedia(). If Telegram refuses the media itself
-// (e.g. an unsupported video), the post still goes out as text.
+// `media`: files from loadItemMedia(). If the media can't be sent (refused,
+// upload error), the post still goes out as text; `mediaError` says why.
 export async function sendToChannel(text, channel, config, media = []) {
   const client = await getBotClient(config);
   const peer = await getChannelPeer(client, config, channel);
   const parseMode = channel.parseMode === 'html' || channel.parseMode === 'markdown' ? channel.parseMode : false;
+  let mediaError = null;
   if (media.length > 0) {
     try {
       return await sendWithMedia(client, peer, text, media, parseMode);
     } catch (err) {
-      if (!isTelegramAnswer(err) || floodWaitSeconds(err) != null) throw err;
-      console.warn(`[publishing] Telegram refused the media (${err.message}); posting the text only`);
+      // A flood-wait applies to the text too: requeue. Anything else about
+      // the media (refused, upload error or timeout) → post the text alone;
+      // if the connection itself is down, that send fails and requeues.
+      if (floodWaitSeconds(err) != null) throw err;
+      mediaError = err.errorMessage || err.message;
+      console.warn(`[publishing] Telegram refused the media (${mediaError}); posting the text only`);
     }
   }
   const message = await withTimeout(
@@ -149,5 +154,5 @@ export async function sendToChannel(text, channel, config, media = []) {
     REQUEST_TIMEOUT_MS,
     'sendMessage'
   );
-  return { messageId: message.id, mediaCount: 0 };
+  return { messageId: message.id, mediaCount: 0, mediaError };
 }

@@ -168,8 +168,9 @@ export function uploadAttributes(m) {
 // channels, and reposting channels tend to stamp their own logo on it; the
 // cleanest copy is usually the original. So: the organisation's official
 // channel first (official-sources.md), then whichever channel posted it
-// earliest. Returns { media, rawItemId } — the first candidate (of up to 3)
-// whose media could be fetched.
+// earliest. Returns { media, rawItemId, candidates, error } — the first
+// candidate (of up to 3) whose media could be fetched; `error` says why none
+// could, when there were candidates.
 export async function loadBestMedia(rawItemId, { officialUsernames = [], loadMedia = loadItemMedia } = {}) {
   const { rows } = await pool.query(
     `SELECT ri.id FROM raw_items ri JOIN sources s ON s.id = ri.source_id
@@ -179,15 +180,19 @@ export async function loadBestMedia(rawItemId, { officialUsernames = [], loadMed
      LIMIT 3`,
     [rawItemId, officialUsernames]
   );
-  let lastError = null;
+  const errors = [];
   for (const { id } of rows) {
     try {
       const media = await loadMedia(Number(id));
-      if (media.length > 0) return { media, rawItemId: Number(id) };
+      if (media.length > 0) return { media, rawItemId: Number(id), candidates: rows.length, error: null };
     } catch (err) {
-      lastError = err;
+      errors.push(err.message);
     }
   }
-  if (lastError && rows.length === 1) throw lastError;
-  return { media: [], rawItemId };
+  return {
+    media: [],
+    rawItemId,
+    candidates: rows.length,
+    error: errors.length ? errors.join(' | ') : rows.length ? 'no photo/video that can be reposted (too large or unsupported type)' : null,
+  };
 }

@@ -123,6 +123,9 @@ test('media: the cleanest copy of a story is used — official channel first, th
 
     const failing = async (id) => (id === Number(official) ? Promise.reject(new Error('gone')) : [{ kind: 'photo', name: '1.jpg' }]);
     assert.equal((await loadBestMedia(repost, { officialUsernames: [other.channel_username], loadMedia: failing })).rawItemId, Number(original), 'falls back to the next copy');
+    const allFail = await loadBestMedia(repost, { loadMedia: async () => { throw new Error('FILE_REFERENCE_EXPIRED'); } });
+    assert.deepEqual(allFail.media, []);
+    assert.match(allFail.error, /FILE_REFERENCE_EXPIRED/, 'the reason is reported, not swallowed');
     await pool.query(`DELETE FROM raw_items WHERE story_id = $1`, [story]);
     await pool.query(`DELETE FROM stories WHERE id = $1`, [story]);
   } finally {

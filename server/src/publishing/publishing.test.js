@@ -389,6 +389,8 @@ test('sender: the post\'s media is passed to the bot; a media problem means a te
     loadMedia: async (id) => [{ kind: 'photo', name: '1.jpg', file: `/tmp/${id}.jpg` }],
   });
   assert.equal(got.length, 1);
+  let p = await pubFor(item);
+  assert.deepEqual([p.media_count, p.media_note], [1, null]);
 
   const item2 = await readyItem();
   await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item2]);
@@ -398,7 +400,19 @@ test('sender: the post\'s media is passed to the bot; a media problem means a te
     loadMedia: async () => { throw new Error('download timed out'); },
   });
   assert.deepEqual(got, []);
-  assert.equal((await pubFor(item2)).status, 'published');
+  p = await pubFor(item2);
+  assert.equal(p.status, 'published');
+  assert.equal(p.media_count, 0);
+  assert.match(p.media_note, /text only: couldn't get the media \(download timed out\)/);
+
+  const item3 = await readyItem();
+  await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item3]);
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'refused', now())`, [item3]);
+  await runPublishingTick({
+    send: async () => ({ messageId: 3, mediaCount: 0, mediaError: 'MEDIA_INVALID' }),
+    loadMedia: async () => [{ kind: 'video', name: '1.mp4', file: '/tmp/x.mp4' }],
+  });
+  assert.match((await pubFor(item3)).media_note, /Telegram refused the media \(MEDIA_INVALID\)/);
 });
 
 test('digest: slots are local times in the configured zone', () => {

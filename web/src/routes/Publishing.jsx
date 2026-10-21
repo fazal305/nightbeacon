@@ -181,8 +181,12 @@ export function PublicationCard({ pub, t, compact = false }) {
       {saved && !dirty && <p className="mt-1 text-xs text-status-good">{t('publishing.savedNote')}</p>}
       {pub.last_error && <p className="mt-1 text-xs text-priority-high">{pub.last_error}</p>}
       {['published', 'sent_manually'].includes(pub.status) && (
-        <p className="mt-1 text-xs text-text-muted">{t('publishing.publishedAt', { time: when(pub.published_at) })}</p>
+        <p className="mt-1 text-xs text-text-muted">
+          {t('publishing.publishedAt', { time: when(pub.published_at) })}
+          {pub.media_count > 0 && ` · ${t('publishing.postedWithMedia', { count: pub.media_count })}`}
+        </p>
       )}
+      {pub.status === 'published' && pub.media_note && <p className="mt-1 text-xs text-priority-medium">{pub.media_note}</p>}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         {editable && manual && (

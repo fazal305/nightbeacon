@@ -44,15 +44,20 @@ async function expireStale(config) {
 }
 
 // Photos/videos for the post (channel option "media", default on). Any
-// problem fetching them means a text-only post, never a lost one.
+// problem fetching them means a text-only post, never a lost one; `note`
+// records why, for the Publishing page.
 async function mediaFor(pub, channel, loadMedia, config) {
-  if (channel.media === false || !pub.raw_item_id) return [];
+  if (channel.media === false || !pub.raw_item_id) return { media: [], note: null };
   try {
     const best = await loadBestMedia(pub.raw_item_id, { officialUsernames: [...config.officialSources.keys()], loadMedia });
-    return best.media;
+    if (best.error) {
+      console.warn(`[publishing] media for item ${pub.raw_item_id} not used: ${best.error} — posting text only`);
+      return { media: [], note: `Posted as text only: couldn't get the media (${best.error})` };
+    }
+    return { media: best.media, note: null };
   } catch (err) {
     console.warn(`[publishing] could not fetch media for item ${pub.raw_item_id}: ${err.message} — posting text only`);
-    return [];
+    return { media: [], note: `Posted as text only: couldn't get the media (${err.message})` };
   }
 }
 
@@ -111,14 +116,17 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   }
 
   try {
-    const media = await mediaFor(pub, channel, loadMedia, config);
-    const { messageId } = await send(pub.final_text, channel, config, media);
+    const { media, note } = await mediaFor(pub, channel, loadMedia, config);
+    const sent = await send(pub.final_text, channel, config, media);
+    const mediaCount = sent.mediaCount ?? media.length;
+    const mediaNote = sent.mediaError ? `Posted as text only: Telegram refused the media (${sent.mediaError})` : note;
     await pool.query(
       `UPDATE publications SET status = 'published', telegram_message_id = $2, published_at = now(),
-                               last_error = NULL, updated_at = now()
+                               media_count = $3, media_note = $4, last_error = NULL, updated_at = now()
        WHERE id = $1`,
-      [pub.id, messageId]
+      [pub.id, sent.messageId, mediaCount, mediaNote]
     );
+    console.log(`[publishing] posted to ${channel.telegram}${mediaCount ? ` with ${mediaCount} photo/video(s)` : ' (text only)'}`);
     publishingStats.lastSentAt = new Date().toISOString();
     publishingStats.lastError = null;
     return [{ id: pub.id, outcome: 'published' }];
