@@ -50,6 +50,19 @@ export function applyTerminology(text, rules) {
   return out;
 }
 
+// The Israeli flag is never used on any channel. Removing it can leave a
+// dangling "⚡" from the "🇮🇷⚡🇮🇱" headline style, so that is tidied too.
+export function removeBannedFlags(text) {
+  if (!text) return text;
+  return text
+    .replace(/\u{1F1EE}\u{1F1F1}/gu, '')
+    .replace(/(\p{Regional_Indicator}{2})⚡(?=[ \t]|$)/gmu, '$1')
+    .replace(/(^|[ \t])⚡(?=\p{Regional_Indicator}{2})/gmu, '$1')
+    .replace(/^[ \t]*⚡[ \t]+/gmu, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/^[ \t]+/gm, '');
+}
+
 // targets: [{ channel, style }]
 export function buildDraftMessages({ item, targets, terminology = [] }) {
   const multi = targets.length > 1;
@@ -59,7 +72,8 @@ export function buildDraftMessages({ item, targets, terminology = [] }) {
       'length, structure, emoji use, capitalisation, hashtags and any recurring sign-off, as shown in its rules and examples.',
     'Use only facts stated in the report. Never invent details, numbers, names, places or times. Keep every figure exactly as reported.',
     'When the news is a statement by a party, attribute it with the neutral verb "said" — the same for every side ("CENTCOM said…", "The IRGC said…"). ' +
-      'Do not use loaded verbs such as "claimed", "alleged", "admitted" or "boasted" for any side.',
+      'Never use the Israeli flag emoji (🇮🇱); for Israeli actors use no flag.',
+    'Do not use loaded verbs such as "claimed", "alleged", "admitted" or "boasted" for any side.',
     'Never say where the report came from: no Telegram channel names or @handles, no "reported by N channels", no "according to sources / local channels / media reports", ' +
       'no links, no source or credit line. Name a person or organisation only when the news itself is their statement or claim.',
     `If the report is not news worth posting on a channel (an advert, a channel promotion, a greeting, too vague to state a fact, or off-topic for that channel), use exactly ${SKIP_TOKEN} for it.`,

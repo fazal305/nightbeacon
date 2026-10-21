@@ -11,7 +11,7 @@ distinct points. Bullets only if the source itself lists several points.]
 
 For urgent alerts start with: ⚠️ BREAKING:
 
-FLAGS: 🇮🇷 Iran · 🇱🇧 Lebanon · 🇮🇱 Israel · 🇺🇸 United States · 🇾🇪 Yemen ·
+FLAGS: 🇮🇷 Iran · 🇱🇧 Lebanon · 🇺🇸 United States · 🇾🇪 Yemen ·
 🇮🇶 Iraq · 🇨🇳 China · 🇷🇺 Russia · 🇸🇾 Syria
 
 RULES:

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pool } from '../db/pool.js';
-import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology } from './prompt.js';
+import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags } from './prompt.js';
 import { parseTerminology } from './config.js';
 import { runDraftingTick } from './drafter.js';
 import { runPublishingTick, publishGate } from './sender.js';
@@ -100,6 +100,12 @@ test('terminology: rules parsed from the file, told to the model, and enforced o
     terminology: rules,
   });
   assert.match(sys, /write "IOF" instead of "IDF"/);
+});
+
+test('the Israeli flag is removed from drafts without leaving stray separators', () => {
+  assert.equal(removeBannedFlags('🇮🇷⚡🇮🇱 Strike reported\nText 🇮🇱 here'), '🇮🇷 Strike reported\nText here');
+  assert.equal(removeBannedFlags('🇮🇱⚡🇾🇪 Port hit'), '🇾🇪 Port hit');
+  assert.equal(removeBannedFlags('🇱🇧⚡🇺🇸 Untouched'), '🇱🇧⚡🇺🇸 Untouched');
 });
 
 test('parseDraft / parseMultiDraft: wrappers, SKIP, 4096 limit, missing keys', () => {

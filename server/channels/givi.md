@@ -26,7 +26,7 @@ points unless it's an official multi-point statement.]
 @GiviDpr
 
 ## FLAG & SYMBOL RULES
-Flags: 🇮🇷 Iran · 🇱🇧 Lebanon / Hezbollah · 🇮🇱 Israel · 🇺🇸 United States ·
+Flags: 🇮🇷 Iran · 🇱🇧 Lebanon / Hezbollah · 🇺🇸 United States ·
 🇾🇪 Yemen · 🇮🇶 Iraq · 🇵🇸 Palestine / Gaza · 🇸🇾 Syria · 🇦🇪 UAE ·
 🌟 resistance factions generally
 

@@ -3,7 +3,7 @@ import { callLLM } from '../processing/llmClient.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
-import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology } from './prompt.js';
+import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags } from './prompt.js';
 
 // Drafting stage, after classification. Work comes from:
 //   - automatic (PUBLISH_MODE review/auto): fresh, fully processed unique
@@ -126,7 +126,7 @@ async function saveDraft(pub, channel, item, draft, model, config) {
          drafted_at = now(), approved_at = CASE WHEN $2 = 'approved' THEN now() END, last_error = NULL,
          updated_at = now()
      WHERE id = $1`,
-    [pub.id, autoApprove ? 'approved' : 'draft', applyTerminology(draft.text, config.terminology), model, item.priority]
+    [pub.id, autoApprove ? 'approved' : 'draft', removeBannedFlags(applyTerminology(draft.text, config.terminology)), model, item.priority]
   );
   return autoApprove ? 'approved' : 'drafted';
 }

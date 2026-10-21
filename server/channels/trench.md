@@ -28,7 +28,6 @@ like the channel naturally does.]
 Flags represent the actors involved — always lead with the most relevant country:
 - 🇮🇷 Iran / IRGC / Iranian Navy
 - 🇺🇸 United States / CENTCOM / US Navy
-- 🇮🇱 Israel / IDF
 - 🇦🇪 UAE / Emirati forces
 - 🇱🇧 Lebanon / Hezbollah
 - 🇾🇪 Yemen / Houthis / Ansarallah
@@ -37,7 +36,7 @@ Flags represent the actors involved — always lead with the most relevant count
 - 🇸🇾 Syria
 - 🌟 = Resistance factions (non-state, Hezbollah ops, etc.)
 Combine flags when multiple actors are involved. ⚡ always appears between flag
-groups to signal breaking news. Example: 🇮🇷⚡🇺🇸 or 🇱🇧⚡🇮🇱 or 🌟⚡🇮🇱
+groups to signal breaking news. Example: 🇮🇷⚡🇺🇸 or 🇱🇧⚡ or 🌟⚡🇱🇧. Never use the Israeli flag.
 
 ## STYLE RULES
 1. Ultra short paragraphs — 2 to 4 lines each. Never a wall of text. Line breaks do the work.
@@ -104,7 +103,7 @@ Trump seems to be writing scripts for Hollywood movies.
 🚩 ResistanceTrench (https://t.me/RezistanceTrench) | Boost (https://t.me/boost/RezistanceTrench)
 
 ## EXAMPLE — BREAKING INCIDENT
-🇮🇱⚡🇾🇪 Israeli official: "We destroyed the port of Hodeidah and the concrete factories that supported Houthi military industries."
+⚡🇾🇪 Israeli official: "We destroyed the port of Hodeidah and the concrete factories that supported Ansarallah military industries."
 
 I wonder why they didn't tell the Americans about that before — they've been bombing Yemen for weeks.
 
