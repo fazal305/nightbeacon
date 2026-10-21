@@ -52,6 +52,16 @@ function readGuideFile(channelsFile, relPath, key) {
   return text;
 }
 
+// "term => replacement" lines; # comments and blank lines ignored.
+export function parseTerminology(text) {
+  const rules = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const m = line.match(/^\s*(?:-\s*)?([^#].*?)\s*=>\s*(.+?)\s*$/);
+    if (m) rules.push({ term: m[1], replacement: m[2] });
+  }
+  return rules;
+}
+
 function readChannelsFile(file) {
   const stat = fs.statSync(file);
   if (fileCache.path === file && fileCache.mtimeMs === stat.mtimeMs) return fileCache.channels;
@@ -125,7 +135,17 @@ export function publishConfig(env = process.env) {
     rawChannels = [];
   }
 
+  // Shared terminology for every channel: PUBLISH_TERMINOLOGY_FILE, or
+  // terminology.md next to the channels file.
+  const termFile = env.PUBLISH_TERMINOLOGY_FILE
+    ? path.resolve(env.PUBLISH_TERMINOLOGY_FILE)
+    : fs.existsSync(file)
+      ? path.join(path.dirname(file), 'terminology.md')
+      : null;
+  const terminology = termFile && fs.existsSync(termFile) ? parseTerminology(readGuideFile(termFile, termFile, 'terminology')) : [];
+
   return {
+    terminology,
     // off: only drafts you request from the dashboard; review: also drafts
     // stories automatically, you approve each; auto: bot-channel drafts at
     // autoPriorities are posted without review.

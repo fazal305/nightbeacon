@@ -34,8 +34,24 @@ function channelSection({ channel, style }, item) {
   return lines.join('\n');
 }
 
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Swaps each term for its replacement (whole words, any case), longest term
+// first so "Israel Defense Forces" wins over a shorter overlapping rule.
+// Applied to every draft, so the house terminology holds even when the
+// model slips back to the source's wording.
+export function applyTerminology(text, rules) {
+  if (!text || !rules?.length) return text;
+  let out = text;
+  for (const { term, replacement } of [...rules].sort((a, b) => b.term.length - a.term.length)) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(term)}(?![\\p{L}\\p{N}_])`, 'giu');
+    out = out.replace(re, replacement);
+  }
+  return out;
+}
+
 // targets: [{ channel, style }]
-export function buildDraftMessages({ item, targets }) {
+export function buildDraftMessages({ item, targets, terminology = [] }) {
   const multi = targets.length > 1;
   const rules = [
     'You write posts for the operator\'s Telegram news channels.',
@@ -59,6 +75,12 @@ export function buildDraftMessages({ item, targets }) {
       : 'Reply with the post text only — no preamble, no quotes, no explanation.'
   );
 
+  if (terminology.length) {
+    rules.push(
+      'Always use these names (house terminology), including inside quotes you paraphrase:\n' +
+        terminology.map((r) => `- write "${r.replacement}" instead of "${r.term}"`).join('\n')
+    );
+  }
   const system = [rules.join('\n'), ...targets.map((t) => channelSection(t, item))].join('\n\n');
 
   const report = [

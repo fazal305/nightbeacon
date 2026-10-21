@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pool } from '../db/pool.js';
-import { buildDraftMessages, parseDraft, parseMultiDraft } from './prompt.js';
+import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology } from './prompt.js';
+import { parseTerminology } from './config.js';
 import { runDraftingTick } from './drafter.js';
 import { runPublishingTick, publishGate } from './sender.js';
 import { publicationsRouter } from '../routes/publications.js';
@@ -84,6 +85,21 @@ test('prompt: one call covers several channels, each with its own style; facts-o
   assert.match(sys, /Never invent/);
   assert.match(sys, /UPDATES an earlier story/);
   assert.match(msgs[1].content, /English translation:\nText[\s\S]*Original text:\nنص/);
+});
+
+test('terminology: rules parsed from the file, told to the model, and enforced on the draft text', () => {
+  const rules = parseTerminology('# comment\nIDF => IOF\nIsrael Defense Forces => Israeli Occupation Forces\nHouthis => Ansarallah\nHouthi => Ansarallah\n\nnot a rule');
+  assert.equal(rules.length, 4);
+  assert.equal(
+    applyTerminology('The Israel Defense Forces (IDF) said Houthi-controlled ports and the Houthis were hit. IDFX stays; idf said.', rules),
+    'The Israeli Occupation Forces (IOF) said Ansarallah-controlled ports and the Ansarallah were hit. IDFX stays; IOF said.'
+  );
+  const [{ content: sys }] = buildDraftMessages({
+    item: { raw_text: 'x', telegram_date: new Date() },
+    targets: [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }],
+    terminology: rules,
+  });
+  assert.match(sys, /write "IOF" instead of "IDF"/);
 });
 
 test('parseDraft / parseMultiDraft: wrappers, SKIP, 4096 limit, missing keys', () => {

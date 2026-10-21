@@ -58,6 +58,15 @@ bot only posts what you approve), whether fresh high/medium stories are fully
 processed, the drafts and their last errors, the bot login, and whether the
 bot is an admin of the bot channel with "Post messages".
 
+## House terminology
+
+`server/channels/terminology.md` (or `PUBLISH_TERMINOLOGY_FILE`) lists names
+used in every post on every channel, one `term => replacement` per line —
+e.g. `IDF => IOF`, `Houthis => Ansarallah`. The model is told to use them, and
+the swaps are also applied to each draft's text (whole words, any
+capitalisation, longest term first), so they hold even when the model copies
+the source's wording. Edits apply to the next draft; no restart needed.
+
 ## How drafts are written
 
 - **Style**: each channel's `styleGuide` (your posting prompt) plus its most

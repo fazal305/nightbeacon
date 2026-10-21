@@ -3,7 +3,7 @@ import { callLLM } from '../processing/llmClient.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
-import { buildDraftMessages, parseDraft, parseMultiDraft } from './prompt.js';
+import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology } from './prompt.js';
 
 // Drafting stage, after classification. Work comes from:
 //   - automatic (PUBLISH_MODE review/auto): fresh, fully processed unique
@@ -126,7 +126,7 @@ async function saveDraft(pub, channel, item, draft, model, config) {
          drafted_at = now(), approved_at = CASE WHEN $2 = 'approved' THEN now() END, last_error = NULL,
          updated_at = now()
      WHERE id = $1`,
-    [pub.id, autoApprove ? 'approved' : 'draft', draft.text, model, item.priority]
+    [pub.id, autoApprove ? 'approved' : 'draft', applyTerminology(draft.text, config.terminology), model, item.priority]
   );
   return autoApprove ? 'approved' : 'drafted';
 }
@@ -176,7 +176,7 @@ export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext
 
     try {
       await gate.wait();
-      const { content, model } = await llm(buildDraftMessages({ item, targets }), {
+      const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology }), {
         providerName: config.draftProvider,
         model: config.draftModel || undefined,
         temperature: 0.4,
