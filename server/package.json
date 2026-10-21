@@ -20,6 +20,7 @@
     "seed:operator": "node src/db/seedOperator.js",
     "telegram:login": "node src/ingestion/generateSession.js",
     "telegram:check-proxy": "node src/ingestion/checkProxy.js",
+    "ingest:check": "node src/ingestion/checkIngestion.js",
     "telegram:check-translate": "node src/processing/checkTelegramTranslate.js",
     "publish:check": "node src/publishing/checkPublishing.js",
     "translate:check": "node src/processing/checkTranslators.js",
