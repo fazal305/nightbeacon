@@ -110,7 +110,9 @@ docs/      Architecture, database, API contract, security, deployment docs
 
 See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). On Windows, once set up,
 double-click `start.cmd` to start everything (LibreTranslate if installed,
-PostgreSQL, the server and the web app) and open the dashboard.
+PostgreSQL, the server and the web app) and open the dashboard. To start it
+automatically at every Windows login, run once:
+`powershell -ExecutionPolicy Bypass -File autostart.ps1` (add `-Remove` to undo).
 
 ## Security
 
