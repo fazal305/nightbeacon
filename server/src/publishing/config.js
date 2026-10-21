@@ -32,6 +32,12 @@ import path from 'node:path';
 //                    (local times in PUBLISH_TIMEZONE, default Asia/Karachi)
 //   media            false to post text only (default: the source's
 //                    photos/videos are posted with the text)
+//   banners          the channel's own banner images, e.g.
+//                    { "dir": "banners/r3syst", "textPosts": true, "digest": true }
+//                    (see banners.js): a source photo that is just a generic
+//                    "breaking news / live" card is swapped for the matching
+//                    banner; textPosts adds one to headline-style posts that
+//                    have no media; digest adds the summary banner
 //   enabled          false to pause a channel
 // Without a channels file, PUBLISH_CHANNEL (+ TELEGRAM_BOT_TOKEN) defines a
 // single bot channel, so the simple setup needs no file at all.
@@ -125,6 +131,9 @@ export function normalizeChannels(rawChannels, defaults) {
       parseMode: (c.parseMode || defaults.parseMode).toLowerCase(),
       media: c.media !== false,
       digest: normalizeDigest(c.digest, key),
+      banners: c.banners?.dir
+        ? { dir: c.banners.dir, replace: c.banners.replace !== false, textPosts: Boolean(c.banners.textPosts), digest: c.banners.digest !== false }
+        : null,
     };
   });
 }
@@ -146,11 +155,13 @@ export function publishConfig(env = process.env) {
   const file = path.resolve(env.PUBLISH_CHANNELS_FILE || 'publish-channels.json');
   let rawChannels;
   if (fs.existsSync(file)) {
-    rawChannels = readChannelsFile(file).map((c) =>
-      c.styleGuideFile
-        ? { ...c, styleGuide: [c.styleGuide, readGuideFile(file, c.styleGuideFile, c.key)].filter(Boolean).join('\n\n') }
-        : c
-    );
+    rawChannels = readChannelsFile(file)
+      .map((c) =>
+        c.styleGuideFile
+          ? { ...c, styleGuide: [c.styleGuide, readGuideFile(file, c.styleGuideFile, c.key)].filter(Boolean).join('\n\n') }
+          : c
+      )
+      .map((c) => (c.banners ? { ...c, banners: { ...c.banners, dir: path.resolve(path.dirname(file), c.banners.dir || `banners/${c.key}`) } } : c));
   } else if (env.PUBLISH_CHANNEL) {
     rawChannels = [
       {

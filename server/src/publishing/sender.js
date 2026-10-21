@@ -4,6 +4,7 @@ import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.
 import { publishConfig, channelByKey } from './config.js';
 import { sendToChannel, resetBotClient } from './botClient.js';
 import { loadItemMedia, loadBestMedia } from './media.js';
+import { applyBanners } from './banners.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
 // faster than PUBLISH_MIN_INTERVAL_SECONDS apart (Telegram's anti-spam
@@ -46,7 +47,7 @@ async function expireStale(config) {
 // Photos/videos for the post (channel option "media", default on). Any
 // problem fetching them means a text-only post, never a lost one; `note`
 // records why, for the Publishing page.
-async function mediaFor(pub, channel, loadMedia, config) {
+async function sourceMedia(pub, channel, loadMedia, config) {
   if (channel.media === false || !pub.raw_item_id) return { media: [], note: null };
   try {
     const best = await loadBestMedia(pub.raw_item_id, { officialUsernames: [...config.officialSources.keys()], loadMedia });
@@ -58,6 +59,24 @@ async function mediaFor(pub, channel, loadMedia, config) {
   } catch (err) {
     console.warn(`[publishing] could not fetch media for item ${pub.raw_item_id}: ${err.message} — posting text only`);
     return { media: [], note: `Posted as text only: couldn't get the media (${err.message})` };
+  }
+}
+
+// The source's media, with the channel's own banners where they apply
+// (banners.js). A banner problem never stops the post.
+async function mediaFor(pub, channel, loadMedia, config) {
+  const found = await sourceMedia(pub, channel, loadMedia, config);
+  if (channel.media === false || !channel.banners) return found;
+  try {
+    const official = pub.source_username ? config.officialSources.has(String(pub.source_username).toLowerCase()) : false;
+    const b = await applyBanners({
+      channel, media: found.media, text: pub.final_text, official, digest: pub.kind === 'digest', storyId: pub.story_id,
+    });
+    if (b.note) console.log(`[publishing] ${b.note}`);
+    return { media: b.media, note: b.note || found.note };
+  } catch (err) {
+    console.warn(`[publishing] banner check failed: ${err.message}`);
+    return found;
   }
 }
 
@@ -100,7 +119,8 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
                    AND (origin = 'manual' OR kind = 'digest' OR channel_key = ANY($2))
                  ORDER BY (origin = 'manual' OR kind = 'digest') DESC, score DESC NULLS LAST, approved_at, id
                  LIMIT 1 FOR UPDATE SKIP LOCKED)
-     RETURNING id, raw_item_id, final_text, channel_key`,
+     RETURNING id, raw_item_id, final_text, channel_key, kind, story_id,
+               (SELECT s.channel_username FROM raw_items ri JOIN sources s ON s.id = ri.source_id WHERE ri.id = publications.raw_item_id) AS source_username`,
     [botKeys, autoKeys]
   );
   const pub = rows[0];

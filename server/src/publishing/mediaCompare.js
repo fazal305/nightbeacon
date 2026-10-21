@@ -183,3 +183,10 @@ export async function chooseCleanest(copies, { fingerprintFn = fingerprint } = {
     note: pick === copies[0] ? null : `cleanest of ${group.length} copies (item ${pick.rawItemId} instead of ${copies[0].rawItemId})`,
   };
 }
+
+// Perceptual hash of a picture (or a video's first frame), for recognising
+// the same image across posts (banners.js).
+export async function photoHash(file) {
+  const frame = await frameAt(file, 0);
+  return frame ? dhash(frame) : null;
+}
