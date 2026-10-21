@@ -64,8 +64,10 @@ Target channels are configured in `server/channels/channels.json`:
   - `house-rules.md` — extra house style (e.g. "martyred" usage)
   - `<channel>.md` — each channel's style guide
 - **Media** — the source's photos/videos (whole albums) are reposted with the
-  text, preferring the cleanest copy (official channel first, then the
-  earliest poster). If media fails the post still goes out as text, and the
+  text, preferring the cleanest copy: the official channel's upload first;
+  otherwise, with ffmpeg installed (`winget install Gyan.FFmpeg`), up to 4
+  copies are compared (frame hashes, length, sound) and the one without a
+  channel's logo is used, then the highest resolution, then the earliest. If media fails the post still goes out as text, and the
   reason is shown in the dashboard.
 - **Dashboard** — score, media, edit/save, approve, reject and **Post now**
   (bypasses the hourly cap).

@@ -10,6 +10,7 @@ import {
   withTimeout,
   REQUEST_TIMEOUT_MS,
 } from '../ingestion/telegramClient.js';
+import { ffmpegAvailable, chooseCleanest } from './mediaCompare.js';
 
 // The source post's photos/videos, for posting them with the text. A bot
 // can't read other channels, and media references are tied to the account
@@ -168,26 +169,39 @@ export function uploadAttributes(m) {
 // channels, and reposting channels tend to stamp their own logo on it; the
 // cleanest copy is usually the original. So: the organisation's official
 // channel first (official-sources.md), then whichever channel posted it
-// earliest. Returns { media, rawItemId, candidates, error } — the first
-// candidate (of up to 3) whose media could be fetched; `error` says why none
-// could, when there were candidates.
-export async function loadBestMedia(rawItemId, { officialUsernames = [], loadMedia = loadItemMedia } = {}) {
+// earliest; with ffmpeg, the copies are compared and the one without a
+// channel's logo is used (mediaCompare.js). Returns { media, rawItemId,
+// candidates, error, note }; `error` says why none could be fetched.
+const COMPARE_MAX = Number(process.env.MEDIA_COMPARE_COPIES || 4);
+
+export async function loadBestMedia(rawItemId, { officialUsernames = [], loadMedia = loadItemMedia, compare } = {}) {
+  const canCompare = compare ?? (String(process.env.MEDIA_COMPARE || 'on').toLowerCase() !== 'off' && ffmpegAvailable());
   const { rows } = await pool.query(
-    `SELECT ri.id FROM raw_items ri JOIN sources s ON s.id = ri.source_id
+    `SELECT ri.id, lower(s.channel_username) = ANY($2::text[]) AS official FROM raw_items ri JOIN sources s ON s.id = ri.source_id
      WHERE ri.has_media
        AND (ri.id = $1 OR (ri.story_id IS NOT NULL AND ri.story_id = (SELECT story_id FROM raw_items WHERE id = $1)))
      ORDER BY lower(s.channel_username) = ANY($2::text[]) DESC, ri.telegram_date, ri.id
-     LIMIT 3`,
-    [rawItemId, officialUsernames]
+     LIMIT $3`,
+    [rawItemId, officialUsernames, canCompare ? COMPARE_MAX : 3]
   );
   const errors = [];
-  for (const { id } of rows) {
+  const loaded = [];
+  for (const { id, official } of rows) {
     try {
       const media = await loadMedia(Number(id));
-      if (media.length > 0) return { media, rawItemId: Number(id), candidates: rows.length, error: null };
+      if (media.length === 0) continue;
+      loaded.push({ rawItemId: Number(id), media, order: loaded.length });
+      // The organisation's own upload is the original: nothing to compare.
+      // Without ffmpeg, the first copy that loads is used.
+      if (official || !canCompare) break;
     } catch (err) {
       errors.push(err.message);
     }
+  }
+  if (loaded.length > 0) {
+    const { pick, note } = canCompare ? await chooseCleanest(loaded) : { pick: loaded[0], note: null };
+    if (note) console.log(`[publishing] media: ${note}`);
+    return { media: pick.media, rawItemId: pick.rawItemId, candidates: rows.length, error: null, note };
   }
   return {
     media: [],
