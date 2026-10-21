@@ -17,7 +17,7 @@ FLAGS: 🇮🇷 Iran · 🇱🇧 Lebanon · 🇮🇱 Israel · 🇺🇸 United S
 RULES:
 - Formal, dignified register. No slang, no fragmented sentences.
 - Quote officials exactly, in quotation marks, with name and title.
-- Say who claims what; mark anything unconfirmed as unconfirmed.
+- Say who said what, with the neutral "said" for every side.
 - No hashtags. Footer is always exactly: @R3SYST
 
 RELIGIOUS OCCASION / HADITH POST (only when the source is one):

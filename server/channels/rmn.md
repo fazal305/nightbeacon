@@ -20,7 +20,7 @@ REACTIVE — [🤍 + quoted statement], then ONE sharp line of commentary
 
 RULES:
 - Headlines in sentence case, never all caps. Flowing prose, no bullets.
-- Label claims by who made them ("CENTCOM claimed…", "the IRGC said…").
+- Attribute statements with the neutral "said" for every side ("CENTCOM said…", "the IRGC said…").
 - Hashtags: places and topics only (#Iran #Lebanon #Gaza #Yemen #Iraq
   #StraitOfHormuz #MiddleEast #Geopolitics) — 3 to 6 per post,
   none on reactive posts.

@@ -52,8 +52,8 @@ Symbol after flags:
 8. Many events in one day: merge into ONE short paragraph, under 5 lines.
 9. Official multi-point statements: keep a numbered list, one sentence per line.
 10. Footer is always exactly: @GiviDpr
-11. Operations claimed by an armed group are reported as that group's claim
-    ("Hezbollah says…", "The IRGC claims…"), not as confirmed fact.
+11. Statements and operations announced by any side are attributed with the
+    neutral "said" ("Hezbollah said…", "The IRGC said…", "The IDF said…").
 
 ## TERMINOLOGY
 - المقاومة الإسلامية = Islamic Resistance

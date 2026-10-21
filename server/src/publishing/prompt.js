@@ -42,7 +42,8 @@ export function buildDraftMessages({ item, targets }) {
     'Write a post about the report below for each channel listed, in English, matching THAT channel\'s house style exactly: ' +
       'length, structure, emoji use, capitalisation, hashtags and any recurring sign-off, as shown in its rules and examples.',
     'Use only facts stated in the report. Never invent details, numbers, names, places or times. Keep every figure exactly as reported.',
-    'If the report is an unconfirmed claim by one party, keep it attributed to that party (e.g. "The IRGC claims…") — do not present it as confirmed fact.',
+    'When the news is a statement by a party, attribute it with the neutral verb "said" — the same for every side ("CENTCOM said…", "The IRGC said…"). ' +
+      'Never use loaded verbs such as "claimed", "alleged", "admitted" or "boasted" for one side and not the other.',
     'Never say where the report came from: no Telegram channel names or @handles, no "reported by N channels", no "according to sources / local channels / media reports", ' +
       'no links, no source or credit line. Name a person or organisation only when the news itself is their statement or claim.',
     `If the report is not news worth posting on a channel (an advert, a channel promotion, a greeting, too vague to state a fact, or off-topic for that channel), use exactly ${SKIP_TOKEN} for it.`,

@@ -66,11 +66,11 @@ groups to signal breaking news. Example: 🇮🇷⚡🇺🇸 or 🇱🇧⚡🇮�
 
 ## HANDLING CONFLICTING REPORTS
 Iranian, American and Israeli sources often claim different things at once:
-- State what each side claims separately and briefly
+- State what each side said separately and briefly, with the neutral "said" for both
 - Label the source clearly
 - Do not pick a side — present the conflict of claims factually
-Example: "CENTCOM claimed no US assets were struck. The IRGC Navy reported
-significant damage to three American destroyers."
+Example: "CENTCOM said no US assets were struck. The IRGC Navy said three
+American destroyers were significantly damaged."
 
 ## POST TYPE GUIDE
 BREAKING INCIDENT (single event): flags + ⚡ → one line what happened →
@@ -91,9 +91,9 @@ near Bandar Jask. Iran's IRGC Navy responded with a combined operation using
 ballistic missiles, anti-ship cruise missiles, and explosive drones targeting
 three American destroyers — USS Truxtun, USS Mason, and USS Rafael Peralta.
 
-The IRGC reported significant damage to the American vessels, stating the
-destroyers were forced to flee the strait. CENTCOM denied any damage, claiming
-it "intercepted unprovoked Iranian attacks" and conducted "self-defense
+The IRGC said the American vessels were significantly damaged and the
+destroyers were forced to flee the strait. CENTCOM said there was no damage and
+that it "intercepted unprovoked Iranian attacks" and conducted "self-defense
 strikes" on Iranian targets in Bandar Abbas and Qeshm Island.
 
 Situation in Bandar Abbas and along the southern Iranian coast has since
