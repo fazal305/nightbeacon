@@ -33,35 +33,70 @@ async function expireStaleRequests(config) {
   );
 }
 
-// At most channel.maxPerHour automatic drafts per channel per hour, so the
-// channel isn't flooded and the LLM's free allowance lasts: high priority
-// first, newest first.
+// Story selection. Instead of drafting every fresh high/medium story the
+// moment it appears, each channel gets at most maxPerHour automatic drafts,
+// spread out (at least minGapMinutes apart), and each slot goes to the
+// best-scoring candidate:
+//
+//   score = priority (high 10, medium 4)
+//         × corroboration (1 + log2 of how many channels reported the story)
+//         × 1.3 if it's an update with new figures
+//         × freshness (halves every hour)
+//
+// A story waits settleMinutes before it can be picked (unless 3+ channels
+// already report it), so corroboration has time to show. A story already
+// drafted for the channel isn't picked again within 6 hours, except an
+// update, 30+ minutes later.
+const SKIPPED_BY_MODEL = 'model judged it not worth posting on this channel';
+
+export const SCORE_SQL = `
+  (CASE ri.priority WHEN 'high' THEN 10 WHEN 'medium' THEN 4 ELSE 1 END)
+  * (1 + ln(greatest(coalesce(st.item_count, 1), 1)) / ln(2))
+  * (CASE WHEN ri.dedup_status = 'update' THEN 1.3 ELSE 1 END)
+  * power(0.5, greatest(extract(epoch FROM now() - ri.telegram_date), 0) / 3600.0)`;
+
 async function queueAutomaticDrafts(config) {
   if (config.mode === 'off') return 0;
   let queued = 0;
   for (const channel of config.channels) {
-    if (channel.draftPriorities.length === 0) continue;
-    const { rows } = await pool.query(
-      `SELECT count(*)::int AS n FROM publications
+    if (channel.draftPriorities.length === 0 || channel.maxPerHour <= 0) continue;
+    // Drafts the model rejected as not worth posting don't use up a slot.
+    const { rows: [recent] } = await pool.query(
+      `SELECT count(*)::int AS n, max(created_at) AS last_at FROM publications
        WHERE channel_key = $1 AND origin = 'auto' AND created_at > now() - interval '1 hour'
-         AND NOT (status = 'rejected' AND last_error = 'model judged it not worth posting on this channel')`,
-      [channel.key]
+         AND NOT (status = 'rejected' AND last_error IS NOT DISTINCT FROM $2)`,
+      [channel.key, SKIPPED_BY_MODEL]
     );
-    const room = channel.maxPerHour - rows[0].n;
-    if (room <= 0) continue;
+    if (recent.n >= channel.maxPerHour) continue;
+    if (recent.last_at && Date.now() - new Date(recent.last_at).getTime() < channel.minGapMinutes * 60_000) continue;
+
     const { rowCount } = await pool.query(
-      `INSERT INTO publications (raw_item_id, story_id, channel_key, priority, origin, status)
-       SELECT ri.id, ri.story_id, $3, ri.priority, 'auto', 'requested'
-       FROM raw_items ri
-       WHERE ri.status = 'ready'
-         AND ri.dedup_status IN ('unique', 'update')
-         AND ri.priority = ANY($1)
-         AND ri.telegram_date >= now() - make_interval(mins => $2)
-         AND NOT EXISTS (SELECT 1 FROM publications p WHERE p.raw_item_id = ri.id AND p.channel_key = $3)
-       ORDER BY CASE ri.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, ri.telegram_date DESC
-       LIMIT $4
+      `WITH candidate AS (
+         SELECT ri.id, ri.story_id, ri.priority, ${SCORE_SQL} AS score,
+                coalesce(st.item_count, 1) AS reports, ri.dedup_status,
+                extract(epoch FROM now() - ri.telegram_date)::int / 60 AS age_min
+         FROM raw_items ri
+         LEFT JOIN stories st ON st.id = ri.story_id
+         WHERE ri.status = 'ready'
+           AND ri.dedup_status IN ('unique', 'update')
+           AND ri.priority = ANY($1)
+           AND ri.telegram_date >= now() - make_interval(mins => $2)
+           AND (ri.telegram_date <= now() - make_interval(mins => $4) OR coalesce(st.item_count, 1) >= 3)
+           AND NOT EXISTS (SELECT 1 FROM publications p WHERE p.raw_item_id = ri.id AND p.channel_key = $3)
+           AND NOT EXISTS (
+             SELECT 1 FROM publications p
+             WHERE p.channel_key = $3 AND ri.story_id IS NOT NULL AND p.story_id = ri.story_id
+               AND p.status NOT IN ('rejected', 'failed', 'expired')
+               AND p.created_at > now() - CASE WHEN ri.dedup_status = 'update' THEN interval '30 minutes' ELSE interval '6 hours' END)
+         ORDER BY score DESC, ri.telegram_date DESC
+         LIMIT 1)
+       INSERT INTO publications (raw_item_id, story_id, channel_key, priority, origin, status, score, score_detail)
+       SELECT id, story_id, $3, priority, 'auto', 'requested', score,
+              priority || ' · ' || reports || CASE WHEN reports = 1 THEN ' channel' ELSE ' channels' END
+                || CASE WHEN dedup_status = 'update' THEN ' · update' ELSE '' END || ' · ' || age_min || ' min old'
+       FROM candidate
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [channel.draftPriorities, config.maxAgeMinutes, channel.key, room]
+      [channel.draftPriorities, config.maxAgeMinutes, channel.key, channel.settleMinutes]
     );
     queued += rowCount;
   }
@@ -111,10 +146,9 @@ async function loadItem(rawItemId) {
 async function saveDraft(pub, channel, item, draft, model, config) {
   if (draft.skip) {
     await pool.query(
-      `UPDATE publications SET status = 'rejected', model = $2, last_error = 'model judged it not worth posting on this channel',
-                               drafted_at = now(), updated_at = now()
+      `UPDATE publications SET status = 'rejected', model = $2, last_error = $3, drafted_at = now(), updated_at = now()
        WHERE id = $1`,
-      [pub.id, model]
+      [pub.id, model, SKIPPED_BY_MODEL]
     );
     return 'skipped';
   }

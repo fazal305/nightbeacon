@@ -86,10 +86,20 @@ the source's wording. Edits apply to the next draft; no restart needed.
   an hour and the next is used; unknown model ids are skipped. Keep
   translation off Groq (`TRANSLATION_PROVIDER=telegram,google,lingva`) so the
   whole budget goes to drafting.
-- **Volume**: at most `PUBLISH_MAX_PER_HOUR` (6) automatic drafts per channel
-  per hour (`maxPerHour` per channel), high priority first, newest first —
-  so the channel isn't flooded and the free budget lasts. Automatic drafts
-  that waited longer than `PUBLISH_MAX_AGE_MINUTES` are expired, not drafted.
+- **Which stories**: each channel gets at most `PUBLISH_MAX_PER_HOUR` (6)
+  automatic drafts an hour (`maxPerHour`), spread at least `minGapMinutes`
+  apart (default: 5 min at 6/hour). Each slot goes to the best-scoring
+  candidate:
+
+  `score = priority (high 10, medium 4) × (1 + log2 channels reporting it) × 1.3 if an update × ½ per hour of age`
+
+  So a story many of your sources carry beats one only a single channel
+  posted, and fresh beats old. A story waits `PUBLISH_SETTLE_MINUTES` (3)
+  before it can be picked, unless 3+ channels already report it, so
+  corroboration has time to show. A story drafted for a channel isn't picked
+  again for 6 hours; an update with new figures can be, 30+ minutes later.
+  The score and its breakdown are shown on each draft. Automatic drafts that
+  waited longer than `PUBLISH_MAX_AGE_MINUTES` are expired, not drafted.
 
 ## Modes
 

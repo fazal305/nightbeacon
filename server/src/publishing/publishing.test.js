@@ -52,6 +52,7 @@ beforeEach(async () => {
   await pool.query('DELETE FROM publications');
   // Earlier tests' posts are still fresh + ready, so the drafter would rightly pick them up too.
   await pool.query('DELETE FROM raw_items WHERE source_id = $1', [sourceId]);
+  await pool.query(`DELETE FROM stories WHERE normalized_text = 'x'`);
   Object.assign(process.env, {
     PUBLISH_MODE: 'review',
     PUBLISH_CHANNELS_FILE: channelsFile,
@@ -132,22 +133,75 @@ test('review mode: one LLM call drafts every channel for a fresh high-priority s
   for (const id of [low, dup, stale]) assert.equal(await pubFor(id, 'main'), undefined);
 });
 
-test('hourly cap: at most maxPerHour automatic drafts per channel, high priority first; stale queued drafts expire', async () => {
-  setChannels([{ ...MAIN, draftPriorities: ['high', 'medium'], maxPerHour: 2 }]);
-  const medium = await readyItem({ priority: 'medium', minutesAgo: 1 });
-  const highOld = await readyItem({ minutesAgo: 30 });
-  const highNew = await readyItem({ minutesAgo: 10 });
+async function storyFor(itemId, reports) {
+  const { rows } = await pool.query(
+    `INSERT INTO stories (canonical_item_id, normalized_text, content_hash, first_seen_at, last_seen_at, item_count)
+     VALUES ($1, 'x', md5(random()::text), now(), now(), $2) RETURNING id`,
+    [itemId, reports]
+  );
+  await pool.query('UPDATE raw_items SET story_id = $2 WHERE id = $1', [itemId, rows[0].id]);
+  return rows[0].id;
+}
+const autoPubs = async () =>
+  (await pool.query(`SELECT raw_item_id, score, score_detail FROM publications WHERE origin = 'auto' ORDER BY created_at`)).rows;
+
+test('selection: best score wins (priority × corroboration × freshness), one slot per gap, cap per hour', async () => {
+  setChannels([{ ...MAIN, draftPriorities: ['high', 'medium'], maxPerHour: 3 }]);
+  const lone = await readyItem({ minutesAgo: 5 });
+  const corroborated = await readyItem({ minutesAgo: 20 });
+  await storyFor(corroborated, 6);
+  const medium = await readyItem({ priority: 'medium', minutesAgo: 4 });
+  await storyFor(medium, 8);
+  const llm = fakeLLM(() => 'Post.');
+
+  await runDraftingTick({ llm, styleFn: style });
+  let picked = await autoPubs();
+  assert.deepEqual(picked.map((p) => p.raw_item_id), [corroborated], 'high reported by 6 channels beats a newer lone high');
+  assert.match(picked[0].score_detail, /high · 6 channels · \d+ min old/);
+
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal((await autoPubs()).length, 1, 'next slot waits for the gap (10 min at 3/hour)');
+
+  await pool.query(`UPDATE publications SET created_at = created_at - interval '11 minutes'`);
+  await runDraftingTick({ llm, styleFn: style });
+  picked = await autoPubs();
+  assert.equal(picked[1].raw_item_id, medium, 'medium reported by 8 channels (~15) beats a lone high (~9)');
+
+  await pool.query(`UPDATE publications SET created_at = created_at - interval '11 minutes'`);
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal((await autoPubs())[2].raw_item_id, lone);
+  await pool.query(`UPDATE publications SET created_at = created_at - interval '11 minutes' WHERE raw_item_id = $1`, [lone]);
+  const another = await readyItem({ minutesAgo: 5 });
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal(await pubFor(another), undefined, '3 per hour reached');
+});
+
+test('selection: a story settles before it is picked unless widely reported; a story is not reposted, an update only after 30 min; stale requests expire', async () => {
+  setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0 }]);
+  const llm = fakeLLM(() => 'Post.');
+  const brandNew = await readyItem({ minutesAgo: 1 });
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal(await pubFor(brandNew), undefined, '1 minute old, 1 channel: still settling');
+  await storyFor(brandNew, 3);
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal((await pubFor(brandNew)).status, 'draft', '3 channels already: no need to wait');
+
+  const storyId = (await pool.query('SELECT story_id FROM raw_items WHERE id = $1', [brandNew])).rows[0].story_id;
+  const update = await readyItem({ minutesAgo: 5, dedup: 'update' });
+  await pool.query('UPDATE raw_items SET story_id = $2 WHERE id = $1', [update, storyId]);
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal(await pubFor(update), undefined, 'same story posted minutes ago');
+  await pool.query(`UPDATE publications SET created_at = created_at - interval '31 minutes'`);
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal((await pubFor(update)).status, 'draft', 'update with new figures, 30+ min later');
+
   const staleItem = await readyItem({ minutesAgo: 600 });
   await pool.query(
-    `INSERT INTO publications (raw_item_id, channel_key, origin, status, created_at)
-     VALUES ($1, 'main', 'auto', 'requested', now() - interval '2 hours')`,
+    `INSERT INTO publications (raw_item_id, channel_key, origin, status) VALUES ($1, 'main', 'auto', 'requested')`,
     [staleItem]
   );
-  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
-  assert.equal((await pubFor(highNew)).status, 'draft');
-  assert.equal((await pubFor(highOld)).status, 'draft');
-  assert.equal(await pubFor(medium), undefined, 'over the cap: medium waits');
-  assert.equal((await pubFor(staleItem)).status, 'expired', 'not drafted after it went stale');
+  await runDraftingTick({ llm, styleFn: style });
+  assert.equal((await pubFor(staleItem)).status, 'expired');
 });
 
 test('auto mode: bot-channel draft is approved and sent; manual channel stays a draft; SKIP is per channel', async () => {

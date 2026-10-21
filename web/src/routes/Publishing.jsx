@@ -97,6 +97,11 @@ export function PublicationCard({ pub, t, compact = false }) {
         <CategoryBadge category={pub.category} />
         {pub.dedup_status === 'update' && <span className="text-accent">{t('feed.storyUpdate')}</span>}
         {pub.story_item_count > 1 && <span>{t('feed.reportedBy', { count: pub.story_item_count })}</span>}
+        {pub.score != null && (
+          <span className="text-accent" title={t('publishing.scoreTitle', { detail: pub.score_detail || '' })}>
+            {t('publishing.score', { score: Math.round(pub.score) })}
+          </span>
+        )}
         {!compact && (
           <>
             <span>· @{pub.channel_username} · {when(pub.telegram_date)}</span>

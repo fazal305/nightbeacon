@@ -19,7 +19,12 @@ import path from 'node:path';
 //                    file), easier for long prompts; re-read when it changes
 //   styleExamples    how many recent channel posts to show the model (default 6)
 //   maxPerHour       automatic drafts per hour for this channel (default
-//                    PUBLISH_MAX_PER_HOUR, 6); the most important, newest win
+//                    PUBLISH_MAX_PER_HOUR, 6); each slot goes to the
+//                    best-scoring story (see drafter.js)
+//   minGapMinutes    at least this long between automatic drafts (default
+//                    half of 60/maxPerHour, so 5 min at 6/hour)
+//   settleMinutes    a story waits this long before it can be picked, so
+//                    corroboration shows (default PUBLISH_SETTLE_MINUTES, 3)
 //   sourceCredit     "none" | "channel"
 //   parseMode        "none" | "html" | "markdown" (bot channels)
 //   enabled          false to pause a channel
@@ -94,6 +99,8 @@ export function normalizeChannels(rawChannels, defaults) {
       styleGuide: c.styleGuide || '',
       styleExamples: Number(c.styleExamples ?? 6),
       maxPerHour: Number(c.maxPerHour ?? defaults.maxPerHour),
+      minGapMinutes: Number(c.minGapMinutes ?? 30 / Math.max(Number(c.maxPerHour ?? defaults.maxPerHour), 1)),
+      settleMinutes: Number(c.settleMinutes ?? defaults.settleMinutes),
       sourceCredit: (c.sourceCredit || defaults.sourceCredit).toLowerCase(),
       parseMode: (c.parseMode || defaults.parseMode).toLowerCase(),
     };
@@ -111,6 +118,7 @@ export function publishConfig(env = process.env) {
     sourceCredit: env.PUBLISH_SOURCE_CREDIT || 'none',
     parseMode: env.PUBLISH_PARSE_MODE || 'none',
     maxPerHour: Number(env.PUBLISH_MAX_PER_HOUR || 6),
+    settleMinutes: Number(env.PUBLISH_SETTLE_MINUTES ?? 3),
   };
 
   const file = path.resolve(env.PUBLISH_CHANNELS_FILE || 'publish-channels.json');

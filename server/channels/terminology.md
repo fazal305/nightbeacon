@@ -17,3 +17,6 @@ Iran's Revolutionary Guards => the IRGC
 Revolutionary Guards => the IRGC
 Hamas's armed wing => Al-Qassam Brigades
 Qassam Brigades => Al-Qassam Brigades
+
+# Strikethrough (Unicode, survives copy-paste into any channel)
+Israel => I̶s̶r̶a̶e̶l̶
