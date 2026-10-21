@@ -199,6 +199,9 @@ test('config: a channel\'s posting prompt can live in its own file, re-read when
   const t = new Date(Date.now() + 5000);
   fs.utimesSync(guide, t, t);
   assert.equal(publishConfig().channels[0].styleGuide, 'Prompt v2');
+  fs.writeFileSync(channelsFile, '\uFEFF' + JSON.stringify([MAIN]));
+  fs.utimesSync(channelsFile, new Date(Date.now() + 9000), new Date(Date.now() + 9000));
+  assert.equal(publishConfig().channels[0].key, 'main', 'UTF-8 BOM from PowerShell/Notepad is accepted');
   setChannels([{ ...MAIN, styleGuideFile: 'missing.md' }]);
   assert.throws(() => publishConfig(), /styleGuideFile not found/);
   fs.rmSync(guide);

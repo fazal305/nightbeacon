@@ -53,7 +53,8 @@ function readGuideFile(channelsFile, relPath, key) {
 function readChannelsFile(file) {
   const stat = fs.statSync(file);
   if (fileCache.path === file && fileCache.mtimeMs === stat.mtimeMs) return fileCache.channels;
-  const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  // Windows PowerShell 5.1 / Notepad may save UTF-8 with a BOM, which JSON.parse rejects.
+  const parsed = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
   if (!Array.isArray(parsed)) throw new Error(`${file} must contain a JSON array of channels`);
   fileCache = { path: file, mtimeMs: stat.mtimeMs, channels: parsed };
   return parsed;
