@@ -242,11 +242,15 @@ quiet channels a few minutes slower. Polling faster risks flood-waits.
 
 ## Draining a large backlog
 
-`npm run translate:drain` (alongside the running server) translates the
-backlog in batches of up to 35 posts per request through the LLM providers
-(`--providers`, default `cerebras,mistral,openrouter,gemini,groq` — Groq and
-Gemini last because drafting needs them too). Posts are claimed exactly like
-the translation worker does, so the two never collide; posts a reply leaves
-out go back to the queue. A provider out of allowance is rested 10 minutes
-and the next takes over; when all are resting it waits. Stops when fewer
-than `--until` (100) are left, or after `--max-minutes`.
+`npm run translate:drain` (alongside the running server) clears the backlog
+with every translator you have keys for, **in parallel**: web translators
+(`deepl, cloudflare, huggingface, microsoft, bing, yandex`, …) take posts one
+by one at their own rate; LLM providers (`cerebras, mistral, openrouter,
+gemini`) take up to 35 per request. Posts are claimed exactly like the
+translation worker claims them, so nothing is translated twice; a post a
+provider couldn't do goes back to the queue and isn't handed to that
+provider again. A provider out of allowance rests (its Retry-After, or 10
+minutes) while the others carry on. Telegram translation is never used here
+(it would double the load on your account), and Groq is left out by default
+(drafting needs it). `--providers` picks the list, `--until` (100) and
+`--max-minutes` say when to stop; a progress line is printed every minute.
