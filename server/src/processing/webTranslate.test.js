@@ -1,6 +1,6 @@
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { WEB_TRANSLATORS, guessNllbLanguage, parseMicrosoftReply, parseYandexReply } from './webTranslate.js';
+import { WEB_TRANSLATORS, guessNllbLanguage, parseMicrosoftReply, parseYandexReply, looksDegenerate, decodeEntities } from './webTranslate.js';
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
@@ -90,4 +90,16 @@ test('mymemory, cloudflare, huggingface, nllb: language passed, quota and unknow
   assert.equal((await WEB_TRANSLATORS.nllb('خبر فوری: انفجار در بندر')).text, 'Explosion in the port');
   assert.deepEqual(JSON.parse(calls[0].init.body), { text: 'خبر فوری: انفجار در بندر', src: 'pes_Arab' });
   for (const k of ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN', 'HF_TOKEN', 'NLLB_URL']) delete process.env[k];
+});
+
+test('garbled machine translations are rejected; entities decoded', () => {
+  const ar = 'تحذير أمريكي لدول الشرق الأوسط من تصعيد حاد في المنطقة';
+  assert.equal(looksDegenerate(ar, 'American warning to Middle East states of a sharp escalation in the region'), false);
+  assert.equal(looksDegenerate(ar, ''), true, 'empty for real text');
+  assert.equal(looksDegenerate('#tag', ''), false, 'nothing to translate');
+  assert.equal(looksDegenerate(ar, 'Website | | | | | | | | |'), true);
+  assert.equal(looksDegenerate(ar, '# #ايت a ______________'), true);
+  assert.equal(looksDegenerate(ar, "From the message of the People's People's People's People's People's Front"), true);
+  assert.equal(looksDegenerate(ar + ' ' + ar, '- ?'), true, 'mostly symbols');
+  assert.equal(decodeEntities('the &quot;NAZA&quot; film &amp; Israel&apos;s'), 'the "NAZA" film & Israel\'s');
 });

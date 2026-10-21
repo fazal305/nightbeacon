@@ -5,7 +5,7 @@ import { translateBatch, isTelegramFloodWait, TRANSLATE_CHUNK_SIZE } from './tel
 import { claimBatch } from '../pipeline/claim.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.js';
-import { WEB_TRANSLATORS, WEB_TRANSLATOR_RATES } from './webTranslate.js';
+import { WEB_TRANSLATORS, WEB_TRANSLATOR_RATES, looksDegenerate } from './webTranslate.js';
 
 // Groq's free tier (default LLM provider, see llmClient.js) allows ~1000
 // requests/10min (~100/min sustained) and ~30k tokens/min — confirmed via
@@ -420,8 +420,8 @@ async function runWebProvider(name, items) {
     try {
       await webGate(name).wait();
       const r = await WEB_TRANSLATORS[name](item.raw_text);
-      if (r.text && r.text.trim()) done.set(item.id, { text: r.text.trim(), lang: r.lang, model: name });
-      else errors.set(item.id, `${name}: empty translation`);
+      if (looksDegenerate(item.raw_text, r.text)) errors.set(item.id, `${name}: unusable translation (garbled or empty)`);
+      else done.set(item.id, { text: r.text.trim(), lang: r.lang, model: name });
     } catch (err) {
       if (err.systemic) return { done, errors, restMs: err.retryAfterMs || REST_MS };
       errors.set(item.id, err.message);

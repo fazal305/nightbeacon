@@ -155,7 +155,7 @@ async function libretranslate(text) {
     }),
   });
   if (typeof json?.translatedText !== 'string') throw providerError('libretranslate', 'unexpected reply', true);
-  return { text: json.translatedText, lang: json.detectedLanguage?.language || null };
+  return { text: decodeEntities(json.translatedText), lang: json.detectedLanguage?.language || null };
 }
 
 // Microsoft Translator reply (official API and the Edge endpoint alike):
@@ -383,6 +383,43 @@ async function nllb(text) {
   });
   if (typeof json?.text !== 'string') throw providerError('nllb', 'unexpected reply', true);
   return { text: json.text, lang: src.slice(0, 3) };
+}
+
+// Some engines (LibreTranslate/Argos especially) return HTML entities.
+export function decodeEntities(text) {
+  return String(text)
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+// A broken machine translation must not be stored as if it were one: the
+// post is then offered to the next translator instead. Catches the failure
+// modes seen from weaker engines: empty output for real text, a token
+// repeated over and over ("| | | |", "ter ter ter", "People's People's"),
+// runs of underscores, and output that is mostly symbols.
+export function looksDegenerate(source, translated) {
+  const out = String(translated || '').trim();
+  const src = String(source || '').trim();
+  const srcLetters = (src.match(/\p{L}/gu) || []).length;
+  if (!out) return srcLetters > 3;
+  if (/_{5,}/.test(out)) return true;
+  const tokens = out.toLowerCase().split(/\s+/).filter(Boolean);
+  let run = 1;
+  for (let i = 1; i < tokens.length; i++) {
+    run = tokens[i] === tokens[i - 1] ? run + 1 : 1;
+    if (run >= 5) return true;
+  }
+  if (tokens.length >= 12) {
+    const counts = new Map();
+    for (const t of tokens) counts.set(t, (counts.get(t) || 0) + 1);
+    if (Math.max(...counts.values()) / tokens.length > 0.35) return true;
+  }
+  const outLetters = (out.match(/\p{L}/gu) || []).length;
+  if (srcLetters >= 20 && outLetters < srcLetters * 0.2) return true;
+  return false;
 }
 
 export const WEB_TRANSLATORS = {
