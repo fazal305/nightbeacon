@@ -362,7 +362,7 @@ async function runTelegramBatch(claimed) {
 // minutes) and the posts move on to the next one, so one provider's limit no
 // longer stalls the whole backlog. A post one provider can't handle (e.g.
 // too long) is offered to the next as well.
-const LLM_PROVIDERS = new Set(['groq', 'openrouter', 'ollama', 'llm']);
+const LLM_PROVIDERS = new Set(['groq', 'gemini', 'openrouter', 'ollama', 'llm']);
 const REST_MS = Number(process.env.TRANSLATION_PROVIDER_REST_SECONDS || 300) * 1000;
 const restingUntil = new Map(); // provider -> timestamp
 const webGates = new Map();

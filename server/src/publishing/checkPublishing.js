@@ -51,6 +51,15 @@ async function main() {
   if (fresh.length && !ready) bad('none are fully processed (status ready) at high/medium priority yet — translation/classification is behind');
   else if (ready) ok(`${ready} high/medium stories ready to draft`);
 
+  const { rows: [queue] } = await pool.query(
+    `SELECT count(*)::int AS n, min(telegram_date) AS oldest,
+            count(*) FILTER (WHERE telegram_date >= now() - interval '2 hours')::int AS fresh
+     FROM raw_items WHERE status IN ('new', 'translating', 'failed_translation') AND dedup_status IN ('unique', 'update', 'legacy')`
+  );
+  const oldestH = queue.oldest ? Math.round((Date.now() - new Date(queue.oldest).getTime()) / 3600_000) : 0;
+  info(`translation queue: ${queue.n} waiting in total (${queue.fresh} from the last 2 hours${queue.n ? `, oldest ${oldestH} h old` : ''})`);
+  if (queue.fresh > 200) bad('translation is behind on fresh news — see TRANSLATION_PROVIDER in docs/PIPELINE.md');
+
   console.log('\n3. Publications');
   const { rows: counts } = await pool.query(
     `SELECT channel_key, status, count(*)::int AS n FROM publications GROUP BY 1, 2 ORDER BY 1, 2`
