@@ -18,6 +18,12 @@ const checks = {
   mistral: llm('mistral'),
   openrouter: llm('openrouter'),
   groq: llm('groq'),
+  // Drafting-only providers: tested here so a new key can be checked.
+  github: llm('github'),
+  nvidia: llm('nvidia'),
+  sambanova: llm('sambanova'),
+  cohere: llm('cohere'),
+  pollinations: llm('pollinations'),
 };
 
 const working = [];
