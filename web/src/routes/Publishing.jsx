@@ -82,6 +82,7 @@ export function PublicationCard({ pub, t, compact = false }) {
   const [showSource, setShowSource] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showMedia, setShowMedia] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [lastSynced, setLastSynced] = useState(pub.final_text);
   // Server copy changed (e.g. redraft finished): adopt it.
   if (pub.final_text !== lastSynced) {
@@ -91,7 +92,13 @@ export function PublicationCard({ pub, t, compact = false }) {
 
   const act = useMutation({
     mutationFn: ({ action }) => api.updatePublication(pub.id, { action, text: text.trim() || undefined }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publications'] }),
+    onSuccess: (_data, { action }) => {
+      if (action === 'save') {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+      return queryClient.invalidateQueries({ queryKey: ['publications'] });
+    },
   });
 
   async function copy() {
@@ -108,10 +115,12 @@ export function PublicationCard({ pub, t, compact = false }) {
   const digest = pub.kind === 'digest';
   const editable = pub.status === 'draft' || pub.status === 'approved';
   const busy = act.isPending;
-  const button = (action, label, tone = 'border-border text-text-muted hover:text-text') => (
+  // Edited but not saved yet (Approve / Mark as sent save the edit too).
+  const dirty = text.trim() !== (pub.final_text || '').trim();
+  const button = (action, label, tone = 'border-border text-text-muted hover:text-text', disabled = false) => (
     <button
       key={action}
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={() => act.mutate({ action })}
       className={`rounded border px-2 py-1 text-xs disabled:opacity-50 ${tone}`}
     >
@@ -168,6 +177,8 @@ export function PublicationCard({ pub, t, compact = false }) {
         </p>
       )}
 
+      {editable && dirty && <p className="mt-1 text-xs text-accent">{t('publishing.unsaved')}</p>}
+      {saved && !dirty && <p className="mt-1 text-xs text-status-good">{t('publishing.savedNote')}</p>}
       {pub.last_error && <p className="mt-1 text-xs text-priority-high">{pub.last_error}</p>}
       {['published', 'sent_manually'].includes(pub.status) && (
         <p className="mt-1 text-xs text-text-muted">{t('publishing.publishedAt', { time: when(pub.published_at) })}</p>
@@ -183,11 +194,11 @@ export function PublicationCard({ pub, t, compact = false }) {
           manual
             ? button('mark_sent', t('publishing.markSent'), 'border-status-good text-status-good')
             : button('approve', t('publishing.approve'), 'border-accent text-accent hover:bg-accent/10'),
-          button('save', t('publishing.save')),
+          button('save', saved ? t('publishing.saved') : t('publishing.save'), dirty ? 'border-accent text-accent' : undefined, !dirty),
           !digest && button('redraft', t('publishing.redraft')),
           button('reject', t('publishing.reject'), 'border-priority-high text-priority-high'),
         ]}
-        {pub.status === 'approved' && [button('save', t('publishing.save')), button('reject', t('publishing.reject'), 'border-priority-high text-priority-high')]}
+        {pub.status === 'approved' && [button('save', saved ? t('publishing.saved') : t('publishing.save'), dirty ? 'border-accent text-accent' : undefined, !dirty), button('reject', t('publishing.reject'), 'border-priority-high text-priority-high')]}
         {['failed', 'expired'].includes(pub.status) && [
           manual
             ? button('mark_sent', t('publishing.markSent'), 'border-status-good text-status-good')
