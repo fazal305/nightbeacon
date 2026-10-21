@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { publishConfig, channelByKey } from '../publishing/config.js';
 import { publishGate, publishingStats } from '../publishing/sender.js';
+import { loadBestMedia } from '../publishing/media.js';
+import { describeError } from '../db/describeError.js';
 
 export const publicationsRouter = Router();
 
@@ -18,7 +20,7 @@ const STATUS_GROUPS = {
 };
 
 const SELECT_PUBLICATIONS = `
-  SELECT p.*, ri.raw_text, ri.telegram_date, ri.category, ri.dedup_status,
+  SELECT p.*, ri.raw_text, ri.telegram_date, ri.category, ri.dedup_status, ri.has_media,
          ri.priority AS item_priority, s.channel_username, s.display_name,
          'https://t.me/' || s.channel_username || '/' || ri.telegram_message_id AS source_url,
          t.translated_text, st.item_count AS story_item_count
@@ -62,6 +64,31 @@ publicationsRouter.get('/item/:rawItemId', h(async (req, res) => {
   if (!Number.isInteger(rawItemId)) return res.status(400).json({ error: 'Invalid item id' });
   const { rows } = await pool.query(`${SELECT_PUBLICATIONS} WHERE p.raw_item_id = $1 ORDER BY p.channel_key`, [rawItemId]);
   res.json({ items: rows.map(withChannel(publishConfig())) });
+}));
+
+// The source post's photos/videos, for posting them by hand on manual
+// channels: list, then download each (fetched once, cached for a day).
+publicationsRouter.get('/item/:rawItemId/media', h(async (req, res) => {
+  const rawItemId = Number(req.params.rawItemId);
+  if (!Number.isInteger(rawItemId)) return res.status(400).json({ error: 'Invalid item id' });
+  try {
+    const { media } = await loadBestMedia(rawItemId, { officialUsernames: [...publishConfig().officialSources.keys()] });
+    res.json({ items: media.map(({ kind, mime, name, size }, index) => ({ index, kind, mime, name, size })) });
+  } catch (err) {
+    res.status(502).json({ error: `Could not fetch the media from Telegram: ${describeError(err)}` });
+  }
+}));
+
+publicationsRouter.get('/item/:rawItemId/media/:index', h(async (req, res) => {
+  const rawItemId = Number(req.params.rawItemId);
+  const index = Number(req.params.index);
+  if (!Number.isInteger(rawItemId) || !Number.isInteger(index)) return res.status(400).json({ error: 'Invalid request' });
+  const { media } = await loadBestMedia(rawItemId, { officialUsernames: [...publishConfig().officialSources.keys()] }).catch(() => ({ media: [] }));
+  const m = media[index];
+  if (!m) return res.status(404).json({ error: 'Not found' });
+  res.type(m.mime);
+  if (req.query.download) res.attachment(`nightbeacon-${rawItemId}-${m.name}`);
+  res.sendFile(m.file);
 }));
 
 publicationsRouter.get('/status', h(async (req, res) => {

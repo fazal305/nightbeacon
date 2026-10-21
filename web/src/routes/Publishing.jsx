@@ -45,11 +45,43 @@ function StatusBar({ status, t }) {
   );
 }
 
+// The source post's photos/videos, fetched from Telegram on request: shown
+// as previews with download links, for attaching when posting by hand.
+function MediaPanel({ rawItemId, t }) {
+  const media = useQuery({
+    queryKey: ['itemMedia', rawItemId],
+    queryFn: () => api.itemMedia(rawItemId),
+    staleTime: 3600_000,
+    retry: false,
+  });
+  if (media.isPending) return <p className="mt-2 text-xs italic text-text-muted">{t('publishing.mediaLoading')}</p>;
+  if (media.isError) return <p className="mt-2 text-xs text-priority-high">{media.error.message}</p>;
+  const items = media.data.items;
+  if (items.length === 0) return <p className="mt-2 text-xs text-text-muted">{t('publishing.mediaNone')}</p>;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {items.map((m) => (
+        <div key={m.index} className="w-40 rounded border border-border bg-panel p-1 text-xs">
+          {m.kind === 'photo' ? (
+            <img src={api.itemMediaUrl(rawItemId, m.index)} alt="" className="h-28 w-full rounded object-cover" />
+          ) : (
+            <video src={api.itemMediaUrl(rawItemId, m.index)} controls muted preload="metadata" className="h-28 w-full rounded bg-black" />
+          )}
+          <a href={api.itemMediaUrl(rawItemId, m.index, true)} className="mt-1 block text-accent hover:underline">
+            {t('publishing.mediaDownload', { kind: t(`publishing.mediaKind.${m.kind}`), mb: (m.size / 1048576).toFixed(1) })}
+          </a>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PublicationCard({ pub, t, compact = false }) {
   const queryClient = useQueryClient();
   const [text, setText] = useState(pub.final_text || '');
   const [showSource, setShowSource] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
   const [lastSynced, setLastSynced] = useState(pub.final_text);
   // Server copy changed (e.g. redraft finished): adopt it.
   if (pub.final_text !== lastSynced) {
@@ -161,8 +193,14 @@ export function PublicationCard({ pub, t, compact = false }) {
             {showSource ? t('publishing.hideSource') : t('publishing.showSource')}
           </button>
         )}
+        {pub.has_media && (
+          <button onClick={() => setShowMedia((v) => !v)} className="text-xs text-text-muted hover:text-text">
+            {showMedia ? t('publishing.hideMedia') : t('publishing.showMedia')}
+          </button>
+        )}
         {act.isError && <span className="text-xs text-priority-high">{act.error.message}</span>}
       </div>
+      {showMedia && <MediaPanel rawItemId={pub.raw_item_id} t={t} />}
 
       {showSource && !compact && (
         <div className="mt-2 space-y-2 rounded border border-border bg-panel p-2 text-xs">

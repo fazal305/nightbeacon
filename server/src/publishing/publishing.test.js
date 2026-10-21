@@ -367,6 +367,28 @@ test('drafter: automatic drafts queued before scored selection (no score) are ex
   assert.equal((await pubFor(item)).status, 'expired');
 });
 
+test('sender: the post\'s media is passed to the bot; a media problem means a text-only post, not a lost one', async () => {
+  const item = await readyItem();
+  await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item]);
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'with media', now())`, [item]);
+  let got;
+  await runPublishingTick({
+    send: async (t, ch, cfg, media) => ((got = media), { messageId: 1 }),
+    loadMedia: async (id) => [{ kind: 'photo', name: '1.jpg', file: `/tmp/${id}.jpg` }],
+  });
+  assert.equal(got.length, 1);
+
+  const item2 = await readyItem();
+  await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item2]);
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'text only', now())`, [item2]);
+  await runPublishingTick({
+    send: async (t, ch, cfg, media) => ((got = media), { messageId: 2 }),
+    loadMedia: async () => { throw new Error('download timed out'); },
+  });
+  assert.deepEqual(got, []);
+  assert.equal((await pubFor(item2)).status, 'published');
+});
+
 test('sender: a real Telegram error (bot not admin) fails the post after 3 attempts', async () => {
   const item = await readyItem();
   await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 't', now())`, [item]);

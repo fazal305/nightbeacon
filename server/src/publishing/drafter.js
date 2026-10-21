@@ -147,7 +147,7 @@ async function claimRequested() {
 
 async function loadItem(rawItemId) {
   const { rows } = await pool.query(
-    `SELECT ri.id, ri.raw_text, ri.telegram_date, ri.category, ri.priority, ri.dedup_status,
+    `SELECT ri.id, ri.raw_text, ri.telegram_date, ri.category, ri.priority, ri.dedup_status, ri.has_media,
             s.channel_username, t.translated_text, st.item_count AS story_item_count
      FROM raw_items ri
      JOIN sources s ON s.id = ri.source_id

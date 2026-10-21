@@ -27,6 +27,8 @@ import path from 'node:path';
 //                    corroboration shows (default PUBLISH_SETTLE_MINUTES, 3)
 //   sourceCredit     "none" | "channel"
 //   parseMode        "none" | "html" | "markdown" (bot channels)
+//   media            false to post text only (default: the source's
+//                    photos/videos are posted with the text)
 //   enabled          false to pause a channel
 // Without a channels file, PUBLISH_CHANNEL (+ TELEGRAM_BOT_TOKEN) defines a
 // single bot channel, so the simple setup needs no file at all.
@@ -103,6 +105,7 @@ export function normalizeChannels(rawChannels, defaults) {
       settleMinutes: Number(c.settleMinutes ?? defaults.settleMinutes),
       sourceCredit: (c.sourceCredit || defaults.sourceCredit).toLowerCase(),
       parseMode: (c.parseMode || defaults.parseMode).toLowerCase(),
+      media: c.media !== false,
     };
   });
 }

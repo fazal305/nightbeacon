@@ -3,6 +3,7 @@ import { RateGate } from '../pipeline/rateGate.js';
 import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.js';
 import { publishConfig, channelByKey } from './config.js';
 import { sendToChannel, resetBotClient } from './botClient.js';
+import { loadItemMedia, loadBestMedia } from './media.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
 // faster than PUBLISH_MIN_INTERVAL_SECONDS apart (Telegram's anti-spam
@@ -36,8 +37,21 @@ async function expireStale(config) {
   );
 }
 
-// `send` is injectable for tests.
-export async function runPublishingTick({ send = sendToChannel } = {}) {
+// Photos/videos for the post (channel option "media", default on). Any
+// problem fetching them means a text-only post, never a lost one.
+async function mediaFor(pub, channel, loadMedia, config) {
+  if (channel.media === false) return [];
+  try {
+    const best = await loadBestMedia(pub.raw_item_id, { officialUsernames: [...config.officialSources.keys()], loadMedia });
+    return best.media;
+  } catch (err) {
+    console.warn(`[publishing] could not fetch media for item ${pub.raw_item_id}: ${err.message} — posting text only`);
+    return [];
+  }
+}
+
+// `send` and `loadMedia` are injectable for tests.
+export async function runPublishingTick({ send = sendToChannel, loadMedia = loadItemMedia } = {}) {
   const config = publishConfig();
   // Not configured yet: approved posts simply wait (the Publishing page says why).
   const botKeys = config.channels.filter((c) => c.delivery === 'bot').map((c) => c.key);
@@ -75,7 +89,7 @@ export async function runPublishingTick({ send = sendToChannel } = {}) {
                    AND (origin = 'manual' OR channel_key = ANY($2))
                  ORDER BY (origin = 'manual') DESC, score DESC NULLS LAST, approved_at, id
                  LIMIT 1 FOR UPDATE SKIP LOCKED)
-     RETURNING id, final_text, channel_key`,
+     RETURNING id, raw_item_id, final_text, channel_key`,
     [botKeys, autoKeys]
   );
   const pub = rows[0];
@@ -91,7 +105,8 @@ export async function runPublishingTick({ send = sendToChannel } = {}) {
   }
 
   try {
-    const { messageId } = await send(pub.final_text, channel, config);
+    const media = await mediaFor(pub, channel, loadMedia, config);
+    const { messageId } = await send(pub.final_text, channel, config, media);
     await pool.query(
       `UPDATE publications SET status = 'published', telegram_message_id = $2, published_at = now(),
                                last_error = NULL, updated_at = now()

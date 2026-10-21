@@ -58,6 +58,26 @@ bot only posts what you approve), whether fresh high/medium stories are fully
 processed, the drafts and their last errors, the bot login, and whether the
 bot is an admin of the bot channel with "Post messages".
 
+## Photos and videos
+
+When the source post has photos, videos or GIFs (a whole album included),
+the bot posts them with the text as the caption. A bot can't read other
+channels, so your monitoring session downloads the files and the bot
+uploads them again; they're cached for a day (`PUBLISH_MEDIA_CACHE_DIR`).
+Captions are limited to 1024 characters — drafts for posts with media are
+asked to stay under 1000, and a longer text follows the media as its own
+message. Files over `PUBLISH_MEDIA_MAX_MB` (50) are left out, and if the
+media can't be fetched or Telegram refuses it, the post goes out as text.
+Set `"media": false` on a channel for text only.
+
+**Cleanest copy**: when several channels carried the story, the media is
+taken from the organisation's official channel first, then from whichever
+channel posted it earliest — the original usually doesn't carry a
+reposter's logo. Watermarks are never removed.
+
+On manual channels, **Show photos/videos** on a draft previews them with
+download links, to attach when you post.
+
 ## House terminology
 
 `server/channels/terminology.md` (or `PUBLISH_TERMINOLOGY_FILE`) lists names

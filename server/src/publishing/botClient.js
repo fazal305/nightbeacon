@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { Api, TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import { Logger, LogLevel } from 'telegram/extensions/Logger.js';
 import { returnBigInt } from 'telegram/Helpers.js';
+import { CustomFile } from 'telegram/client/uploads.js';
 import { buildProxyCandidates, describeProxy } from '../ingestion/proxyConfig.js';
 import { applyProxyTransport } from '../ingestion/fakeTlsConnection.js';
-import { withTimeout, isTelegramAnswer, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
+import { withTimeout, isTelegramAnswer, floodWaitSeconds, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
+import { CAPTION_LIMIT, uploadAttributes } from './media.js';
 import { getState, setState } from '../db/appState.js';
 
 // The publishing bot, logged in with the BotFather token over MTProto — not
@@ -97,14 +100,54 @@ export async function getChannelPeer(client, config, channel) {
   return peer;
 }
 
-export async function sendToChannel(text, channel, config) {
-  const client = await getBotClient(config);
-  const peer = await getChannelPeer(client, config, channel);
-  const parseMode = channel.parseMode === 'html' || channel.parseMode === 'markdown' ? channel.parseMode : false;
+const UPLOAD_TIMEOUT_MS = Number(process.env.PUBLISH_MEDIA_TIMEOUT_SECONDS || 180) * 1000;
+
+// Uploads the post's photos/videos with the text as caption (an album when
+// there are several). Telegram captions are limited to 1024 characters, so a
+// longer text follows the media as its own message.
+async function sendWithMedia(client, peer, text, media, parseMode) {
+  const files = media.map((m) => new CustomFile(m.name, fs.statSync(m.file).size, m.file));
+  const fitsCaption = text.length <= CAPTION_LIMIT;
+  const sent = await withTimeout(
+    client.sendFile(peer, {
+      file: files.length === 1 ? files[0] : files,
+      caption: fitsCaption ? text : '',
+      parseMode,
+      attributes: files.length === 1 ? uploadAttributes(media[0]) : media.map(uploadAttributes),
+      supportsStreaming: true,
+      workers: 1,
+    }),
+    UPLOAD_TIMEOUT_MS * media.length,
+    'send media'
+  );
+  const first = Array.isArray(sent) ? sent[0] : sent;
+  if (fitsCaption) return { messageId: first.id, mediaCount: media.length };
   const message = await withTimeout(
     client.sendMessage(peer, { message: text, parseMode, linkPreview: false }),
     REQUEST_TIMEOUT_MS,
     'sendMessage'
   );
-  return { messageId: message.id };
+  return { messageId: message.id, mediaCount: media.length };
+}
+
+// `media`: files from loadItemMedia(). If Telegram refuses the media itself
+// (e.g. an unsupported video), the post still goes out as text.
+export async function sendToChannel(text, channel, config, media = []) {
+  const client = await getBotClient(config);
+  const peer = await getChannelPeer(client, config, channel);
+  const parseMode = channel.parseMode === 'html' || channel.parseMode === 'markdown' ? channel.parseMode : false;
+  if (media.length > 0) {
+    try {
+      return await sendWithMedia(client, peer, text, media, parseMode);
+    } catch (err) {
+      if (!isTelegramAnswer(err) || floodWaitSeconds(err) != null) throw err;
+      console.warn(`[publishing] Telegram refused the media (${err.message}); posting the text only`);
+    }
+  }
+  const message = await withTimeout(
+    client.sendMessage(peer, { message: text, parseMode, linkPreview: false }),
+    REQUEST_TIMEOUT_MS,
+    'sendMessage'
+  );
+  return { messageId: message.id, mediaCount: 0 };
 }

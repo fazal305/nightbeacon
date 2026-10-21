@@ -57,6 +57,9 @@ export const api = {
   publications: (params = {}) => request(`/publications?${new URLSearchParams(params).toString()}`),
   publicationStatus: () => request('/publications/status'),
   publicationsForItem: (rawItemId) => request(`/publications/item/${rawItemId}`),
+  itemMedia: (rawItemId) => request(`/publications/item/${rawItemId}/media`),
+  itemMediaUrl: (rawItemId, index, download = false) =>
+    `${BASE}/publications/item/${rawItemId}/media/${index}${download ? '?download=1' : ''}`,
   requestDraft: (rawItemId, channelKey) =>
     request('/publications', { method: 'POST', body: JSON.stringify({ rawItemId, channelKey }) }),
   updatePublication: (id, body) => request(`/publications/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

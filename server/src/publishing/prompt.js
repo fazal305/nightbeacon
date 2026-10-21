@@ -103,6 +103,12 @@ export function buildDraftMessages({ item, targets, terminology = [], officialSo
       'no links, no source or credit line. Name a person or organisation only when the news itself is their statement or claim.',
     `If the report is not news worth posting on a channel (an advert, a channel promotion, a greeting, too vague to state a fact, or off-topic for that channel), use exactly ${SKIP_TOKEN} for it.`,
   ];
+  if (item.has_media) {
+    rules.push(
+      'The post will be published with the source\'s photo/video attached, so keep each post under 1000 characters ' +
+        '(Telegram\'s caption limit) and don\'t write "see video" or describe the media beyond what the report says.'
+    );
+  }
   if (item.dedup_status === 'update') {
     rules.push('This report UPDATES an earlier story (new figures or details). Make the new information the lead.');
   }
