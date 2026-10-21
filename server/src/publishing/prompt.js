@@ -63,6 +63,31 @@ export function removeBannedFlags(text) {
     .replace(/^[ \t]+/gm, '');
 }
 
+// Official statements are posted word for word (only translated). For the
+// check, links, @handles, #tags, emoji, punctuation and case are ignored —
+// the posting rules drop links/handles, and header/footer lines are added.
+export function wordsOnly(text) {
+  return String(text || '')
+    .replace(/https?:\/\/\S+|t\.me\/\S+/gi, ' ')
+    .replace(/[@#][\p{L}\p{N}_]+/gu, ' ')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+}
+
+export function keepsStatementVerbatim(draft, statement) {
+  const s = wordsOnly(statement);
+  return s.length > 0 && wordsOnly(draft).includes(s);
+}
+
+export function statementText(item) {
+  return item.translated_text || item.raw_text;
+}
+
+export function officialOrganisation(item, officialSources) {
+  return officialSources?.get(String(item.channel_username || '').toLowerCase()) || null;
+}
+
 // targets: [{ channel, style }]
 export function buildDraftMessages({ item, targets, terminology = [], officialSources = new Map() }) {
   const multi = targets.length > 1;
@@ -114,9 +139,15 @@ export function buildDraftMessages({ item, targets, terminology = [], officialSo
     item.category ? `Category: ${item.category}` : null,
     item.priority ? `Priority: ${item.priority}` : null,
     organisations.length
-      ? officialSources.has(String(item.channel_username || '').toLowerCase())
-        ? `Source: the official channel of ${officialSources.get(String(item.channel_username).toLowerCase())}`
+      ? officialOrganisation(item, officialSources)
+        ? `Source: the official channel of ${officialOrganisation(item, officialSources)}`
         : 'Source: not an official channel of any organisation listed above'
+      : null,
+    officialOrganisation(item, officialSources)
+      ? `This is an official statement of ${officialOrganisation(item, officialSources)}. Use the English ` +
+        `${item.translated_text ? 'translation' : 'text'} above WORD FOR WORD as the body of the post: do not shorten, ` +
+        'paraphrase, reorder, correct, summarise or add a single word, and do not change any names or terms in it. ' +
+        'Only add the channel\'s own header line and footer around it, and leave out links and @channel handles.'
       : null,
   ]
     .filter(Boolean)

@@ -3,7 +3,10 @@ import { callLLM } from '../processing/llmClient.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
-import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags } from './prompt.js';
+import {
+  buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags,
+  keepsStatementVerbatim, statementText, officialOrganisation,
+} from './prompt.js';
 
 // Drafting stage, after classification. Work comes from:
 //   - automatic (PUBLISH_MODE review/auto): fresh, fully processed unique
@@ -165,15 +168,25 @@ async function saveDraft(pub, channel, item, draft, model, config) {
     );
     return 'skipped';
   }
+  // An official statement keeps its exact (translated) wording: no house
+  // terminology inside it, and if the model changed any words it is not
+  // posted automatically — it waits for review with a note.
+  const official = officialOrganisation(item, config.officialSources);
+  const text = removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology));
+  const altered = official && !keepsStatementVerbatim(text, statementText(item));
   const autoApprove =
+    !altered &&
     config.mode === 'auto' && channel.delivery === 'bot' && pub.origin === 'auto' && channel.autoPriorities.includes(item.priority);
   await pool.query(
     `UPDATE publications
      SET status = $2, draft_text = $3, final_text = $3, model = $4, priority = $5,
-         drafted_at = now(), approved_at = CASE WHEN $2 = 'approved' THEN now() END, last_error = NULL,
+         drafted_at = now(), approved_at = CASE WHEN $2 = 'approved' THEN now() END, last_error = $6,
          updated_at = now()
      WHERE id = $1`,
-    [pub.id, autoApprove ? 'approved' : 'draft', removeBannedFlags(applyTerminology(draft.text, config.terminology)), model, item.priority]
+    [
+      pub.id, autoApprove ? 'approved' : 'draft', text, model, item.priority,
+      altered ? `statement wording differs from the ${official} statement's translation — check before posting` : null,
+    ]
   );
   return autoApprove ? 'approved' : 'drafted';
 }

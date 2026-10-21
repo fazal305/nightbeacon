@@ -77,6 +77,13 @@ statement relayed by any other channel is skipped (`SKIP`). Ordinary news
 from other channels is unaffected. Reports from official channels score
 double in story selection, since a statement appears once, on one channel.
 
+Statements from official channels are posted **word for word** — only
+translated: the model may add the channel's header and footer but must use
+the translation unchanged, house terminology is not applied inside it, and
+links/@handles are left out. If the draft's wording differs from the
+translation (links, handles, emoji, punctuation and case aside), it is not
+posted automatically; it waits for review with a note.
+
 ## How drafts are written
 
 - **Style**: each channel's `styleGuide` (your posting prompt) plus its most

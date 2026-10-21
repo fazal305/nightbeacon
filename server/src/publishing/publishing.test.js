@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pool } from '../db/pool.js';
-import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags } from './prompt.js';
+import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags, keepsStatementVerbatim } from './prompt.js';
 import { parseTerminology } from './config.js';
 import { runDraftingTick } from './drafter.js';
 import { runPublishingTick, publishGate } from './sender.js';
@@ -210,6 +210,34 @@ test('selection: a report from an official channel scores double', async () => {
   } finally {
     fs.rmSync(officialFile, { force: true });
   }
+});
+
+test('official statements: word for word; no terminology inside; an altered statement is not auto-posted', async () => {
+  process.env.PUBLISH_MODE = 'auto';
+  const officialFile = path.join(path.dirname(channelsFile), 'official-sources.md');
+  const termFile = path.join(path.dirname(channelsFile), 'terminology.md');
+  const username = (await pool.query('SELECT channel_username FROM sources WHERE id = $1', [sourceId])).rows[0].channel_username;
+  fs.writeFileSync(officialFile, `@${username} => Hezbollah\n`);
+  fs.writeFileSync(termFile, 'Israeli army => Israeli occupation army\n');
+  const statement = 'The Islamic Resistance targeted a gathering of Israeli army soldiers at 14:30.';
+  try {
+    setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0 }]);
+    const exact = await readyItem({ text: statement });
+    await runDraftingTick({ llm: fakeLLM(() => `🇱🇧 Hezbollah:\n\n${statement}\n\n@main`), styleFn: style });
+    const p1 = await pubFor(exact);
+    assert.equal(p1.status, 'approved', 'verbatim statement is posted automatically');
+    assert.match(p1.final_text, /Israeli army soldiers/, 'terminology not applied inside the statement');
+
+    const reworded = await readyItem({ text: statement + ' ' });
+    await runDraftingTick({ llm: fakeLLM(() => '🇱🇧 Hezbollah targeted soldiers at 14:30.\n\n@main'), styleFn: style });
+    const p2 = await pubFor(reworded);
+    assert.equal(p2.status, 'draft', 'altered statement waits for review');
+    assert.match(p2.last_error, /wording differs/);
+  } finally {
+    fs.rmSync(officialFile, { force: true });
+    fs.rmSync(termFile, { force: true });
+  }
+  assert.equal(keepsStatementVerbatim('HEADER\n"The  statement, here!" https://t.me/x @chan', 'The statement here'), true);
 });
 
 test('selection: a story settles before it is picked unless widely reported; a story is not reposted, an update only after 30 min; stale requests expire', async () => {
