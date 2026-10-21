@@ -89,7 +89,13 @@ export function officialOrganisation(item, officialSources) {
 }
 
 // targets: [{ channel, style }]
-export function buildDraftMessages({ item, targets, terminology = [], officialSources = new Map() }) {
+const houseRulesBlock = (houseRules) =>
+  houseRules.length
+    ? 'House writing rules (follow them in every post, except inside an official statement, which stays word for word):\n' +
+      houseRules.map((r) => `- ${r}`).join('\n')
+    : null;
+
+export function buildDraftMessages({ item, targets, terminology = [], officialSources = new Map(), houseRules = [] }) {
   const multi = targets.length > 1;
   const rules = [
     'You write posts for the operator\'s Telegram news channels.',
@@ -129,6 +135,7 @@ export function buildDraftMessages({ item, targets, terminology = [], officialSo
         'Other news reports are unaffected.'
     );
   }
+  if (houseRules.length) rules.push(houseRulesBlock(houseRules));
   if (terminology.length) {
     rules.push(
       'Always use these names (house terminology), including inside quotes you paraphrase:\n' +
@@ -194,7 +201,7 @@ export function parseMultiDraft(content, keys) {
 
 // Scheduled summary of several stories for one channel. Same factual rules
 // as single posts; each story is summarised in a line or two.
-export function buildDigestMessages({ channel, style, stories, since, timeZone, terminology = [], officialSources = new Map() }) {
+export function buildDigestMessages({ channel, style, stories, since, timeZone, terminology = [], officialSources = new Map(), houseRules = [] }) {
   const organisations = [...new Set(officialSources.values())];
   const rules = [
     `You write the scheduled news summary for the Telegram channel "${channel.name}".`,
@@ -215,6 +222,7 @@ export function buildDigestMessages({ channel, style, stories, since, timeZone, 
         'then use its exact words (a short exact excerpt is fine) — never paraphrase it. Leave out statements by them marked "unofficial channel".'
     );
   }
+  if (houseRules.length) rules.push(houseRulesBlock(houseRules));
   if (terminology.length) {
     rules.push('Always use these names:\n' + terminology.map((r) => `- write "${r.replacement}" instead of "${r.term}"`).join('\n'));
   }

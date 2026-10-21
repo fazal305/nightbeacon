@@ -180,9 +180,22 @@ export function publishConfig(env = process.env) {
       .map((r) => [r.term.replace(/^@/, '').toLowerCase(), r.replacement])
   );
 
+  // House writing rules for every channel: house-rules.md next to the
+  // channels file (plain lines; # comments ignored).
+  const rulesFile = env.PUBLISH_HOUSE_RULES_FILE
+    ? path.resolve(env.PUBLISH_HOUSE_RULES_FILE)
+    : fs.existsSync(file)
+      ? path.join(path.dirname(file), 'house-rules.md')
+      : null;
+  const houseRules = (rulesFile && fs.existsSync(rulesFile) ? readGuideFile(rulesFile, rulesFile, 'house rules') : '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+
   return {
     terminology,
     officialSources,
+    houseRules,
     // off: only drafts you request from the dashboard; review: also drafts
     // stories automatically, you approve each; auto: bot-channel drafts at
     // autoPriorities are posted without review.

@@ -100,6 +100,14 @@ the swaps are also applied to each draft's text (whole words, any
 capitalisation, longest term first), so they hold even when the model copies
 the source's wording. Edits apply to the next draft; no restart needed.
 
+## House writing rules
+
+`server/channels/house-rules.md` holds plain-language rules (one per line)
+added to the drafting instructions of every channel and of the summaries —
+for wording that depends on context and so can't be a simple term swap,
+e.g. "write *martyred* for Palestinian, Iranian or Iraqi deaths". Official
+statements still stay word for word. Edits apply to the next draft.
+
 ## Official statements
 
 `server/channels/official-sources.md` lists the official channels of

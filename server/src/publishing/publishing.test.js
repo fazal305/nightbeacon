@@ -130,6 +130,25 @@ test('official channels: statements only from the organisation\'s own channel; t
   assert.doesNotMatch(none, /Official statements/);
 });
 
+test('house rules: plain lines from the file reach every channel\'s prompt', async () => {
+  const rulesFile = path.join(path.dirname(channelsFile), 'house-rules.md');
+  fs.writeFileSync(rulesFile, '# comment\nWrite "martyred" for Palestinian deaths.\n\n');
+  try {
+    setChannels([MAIN, ALERTS]);
+    const { publishConfig } = await import('./config.js');
+    const config = publishConfig();
+    assert.deepEqual(config.houseRules, ['Write "martyred" for Palestinian deaths.']);
+    const [{ content: sys }] = buildDraftMessages({
+      item: { raw_text: 'x', telegram_date: new Date() },
+      targets: [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }],
+      houseRules: config.houseRules,
+    });
+    assert.match(sys, /House writing rules[\s\S]*- Write "martyred" for Palestinian deaths\./);
+  } finally {
+    fs.rmSync(rulesFile, { force: true });
+  }
+});
+
 test('parseDraft / parseMultiDraft: wrappers, SKIP, 4096 limit, missing keys', () => {
   assert.deepEqual(parseDraft('SKIP'), { skip: true, text: null });
   assert.equal(parseDraft('```\n🔴 Post\n```').text, '🔴 Post');

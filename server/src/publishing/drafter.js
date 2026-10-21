@@ -253,7 +253,7 @@ export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext
 
     try {
       await gate.wait();
-      const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources }), {
+      const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules }), {
         providerName: config.draftProvider,
         model: config.draftModel || undefined,
         temperature: 0.4,

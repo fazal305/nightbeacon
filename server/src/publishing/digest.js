@@ -110,7 +110,7 @@ export async function runDigestTick({ llm = callLLM, styleFn = getStyleContext, 
       const style = await styleFn(channel);
       const { content, model } = await llm(
         buildDigestMessages({ channel, style, stories, since: previous, timeZone: config.timeZone,
-          terminology: config.terminology, officialSources: config.officialSources }),
+          terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules }),
         { providerName: config.draftProvider, model: config.draftModel || undefined, temperature: 0.3 }
       );
       const draft = parseDraft(content);
