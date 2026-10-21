@@ -22,6 +22,25 @@ function examplesBlock(examples) {
     : '(no example posts available: write a concise, factual news post, 1–3 short paragraphs)';
 }
 
+// The channel's style, compactly: its cached style card (style.js) plus one
+// short example to anchor it, or — until a card exists — the raw examples.
+function styleBlock(style) {
+  if (style.card) {
+    const anchor = (style.examples || []).filter((e) => e.length <= 450).sort((a, b) => a.length - b.length)[0];
+    return `House style of this channel (follow it exactly):\n${style.card}` + (anchor ? `\nOne recent post, for the look only (do not reuse its facts):\n${anchor}` : '');
+  }
+  return `Recent posts from this channel (style reference only — do not reuse their facts):\n${examplesBlock(style.examples)}`;
+}
+
+// Long reports are cut for drafting (an official statement never is: it is
+// posted word for word).
+const REPORT_MAX_CHARS = Number(process.env.DRAFT_REPORT_MAX_CHARS || 2500);
+export function compactReport(text, official) {
+  const t = String(text || '').trim();
+  if (official || t.length <= REPORT_MAX_CHARS) return t;
+  return `${t.slice(0, REPORT_MAX_CHARS).replace(/\s+\S*$/, '')} …`;
+}
+
 function channelSection({ channel, style }, item) {
   const lines = [`Channel "${channel.key}" — ${channel.name}${channel.telegram ? ` (${channel.telegram})` : ''}`];
   if (style.guide) lines.push(`Posting rules from the editor:\n${style.guide}`);
@@ -30,7 +49,7 @@ function channelSection({ channel, style }, item) {
   } else {
     lines.push('Do not mention the source Telegram channel by name.');
   }
-  lines.push(`Recent posts from this channel (style reference only — do not reuse their facts):\n${examplesBlock(style.examples)}`);
+  lines.push(styleBlock(style));
   return lines.join('\n');
 }
 
@@ -144,10 +163,13 @@ export function buildDraftMessages({ item, targets, terminology = [], officialSo
   }
   const system = [rules.join('\n'), ...targets.map((t) => channelSection(t, item))].join('\n\n');
 
+  // Only the English text when there is one: the original doubles the size
+  // of the request for little gain.
+  const official = Boolean(officialOrganisation(item, officialSources));
   const report = [
     item.translated_text && item.translated_text !== item.raw_text
-      ? `English translation:\n${item.translated_text}\n\nOriginal text:\n${item.raw_text}`
-      : `Report:\n${item.raw_text}`,
+      ? `Report (English translation):\n${compactReport(item.translated_text, official)}`
+      : `Report:\n${compactReport(item.raw_text, official)}`,
     `Time: ${new Date(item.telegram_date).toISOString()}`,
     item.category ? `Category: ${item.category}` : null,
     item.priority ? `Priority: ${item.priority}` : null,
@@ -229,7 +251,7 @@ export function buildDigestMessages({ channel, style, stories, since, timeZone, 
   const system = [
     rules.join('\n'),
     style.guide ? `Posting rules from the editor:\n${style.guide}` : null,
-    `Recent posts from this channel (style reference only — do not reuse their facts):\n${examplesBlock(style.examples)}`,
+    styleBlock(style),
   ]
     .filter(Boolean)
     .join('\n\n');

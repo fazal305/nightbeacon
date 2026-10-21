@@ -86,7 +86,8 @@ test('prompt: one call covers several channels, each with its own style; facts-o
   assert.match(sys, /JSON object[\s\S]*"main": "\.\.\."[\s\S]*"alerts": "\.\.\."/);
   assert.match(sys, /Never invent/);
   assert.match(sys, /UPDATES an earlier story/);
-  assert.match(msgs[1].content, /English translation:\nText[\s\S]*Original text:\nنص/);
+  assert.match(msgs[1].content, /Report \(English translation\):\nText/);
+  assert.doesNotMatch(msgs[1].content, /نص/, 'original left out when there is a translation');
 });
 
 test('terminology: rules parsed from the file, told to the model, and enforced on the draft text', () => {

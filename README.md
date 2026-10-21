@@ -72,6 +72,10 @@ Drafting uses an LLM rotation across Groq, Gemini, Cerebras, Mistral,
 GitHub Models, NVIDIA, SambaNova, Cohere, OpenRouter, Cloudflare, Hugging
 Face, Ollama and keyless Pollinations as the last resort, and across several
 models within each provider (providers without a key are skipped).
+Requests are kept small: each channel's style is condensed once into a short
+cached *style card* (rebuilt when its posts or rules change), and only the
+English text of a report is sent, so even a local 7–8B model (`ollama`) can
+draft. `DRAFT_STYLE_CARDS=off` sends example posts instead.
 `npm run publish:drain` clears a queue of posts waiting to be drafted with
 all of them in parallel.
 See [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
