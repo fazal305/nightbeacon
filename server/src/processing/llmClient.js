@@ -63,7 +63,7 @@ export function stripThinking(content) {
 // A provider that can't take the request right now (out of its free
 // allowance, request too large for it, unreachable, no key): try the next.
 export function isProviderUnavailable(err) {
-  return /rate limit|429|413|quota|not configured|every configured model|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
+  return /rate limit|429|413|402|quota|credits|not configured|every configured model|not a valid model|no endpoints found|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
 }
 
 // `providerName` may be a list, e.g. "groq,gemini": providers are tried in
@@ -123,7 +123,7 @@ async function callProvider(
         // This request is bigger than the model's per-minute token limit
         // (e.g. 8k TPM): no point waiting, a model with a larger limit may take it.
         if (models.length > 1) console.warn(`[llm] request too large for ${model} — trying the next model`);
-      } else if (err.status === 404 || /decommissioned|model_not_found|does not exist/i.test(err.message)) {
+      } else if (err.status === 404 || /decommissioned|model_not_found|does not exist|not a valid model|no endpoints found/i.test(err.message)) {
         modelBlockedUntil.set(key, Infinity);
         console.warn(`[llm] model "${model}" is not available on ${provider.label} — skipping it`);
       } else {

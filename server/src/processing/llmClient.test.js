@@ -74,3 +74,19 @@ test('llm: a list of providers falls through to the next when one is out of allo
   assert.deepEqual(hosts, ['api.groq.com', 'generativelanguage.googleapis.com']);
   delete process.env.GEMINI_API_KEY;
 });
+
+test('llm: OpenRouter-style "not a valid model" ids are skipped', async () => {
+  process.env.OPENROUTER_API_KEY = 'o';
+  globalThis.fetch = async (url, init) => {
+    const { model } = JSON.parse(init.body);
+    const bad = model === 'gone/model:free';
+    return {
+      ok: !bad,
+      status: bad ? 400 : 200,
+      text: async () => '{"error":{"message":"gone/model:free is not a valid model ID"}}',
+      json: async () => ({ choices: [{ message: { content: `from ${model}` } }] }),
+    };
+  };
+  const r = await callLLM([], { providerName: 'openrouter', model: 'gone/model:free,good/model:free' });
+  assert.equal(r.content, 'from good/model:free');
+});
