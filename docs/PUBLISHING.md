@@ -46,6 +46,18 @@ failover. No new dependency. Pacing uses the existing `RateGate`
    Both files are re-read when they change; no restart needed. With only one
    channel you can skip the file and set `PUBLISH_CHANNEL=@my_main` instead.
 
+## Nothing is being posted?
+
+```bash
+npm run publish:check              # explains each step; posts nothing
+npm run publish:check -- --send-test   # also sends one test post via the bot
+```
+
+It checks, in order: the channels file and `PUBLISH_MODE` (in `review` the
+bot only posts what you approve), whether fresh high/medium stories are fully
+processed, the drafts and their last errors, the bot login, and whether the
+bot is an admin of the bot channel with "Post messages".
+
 ## How drafts are written
 
 - **Style**: each channel's `styleGuide` (your posting prompt) plus its most

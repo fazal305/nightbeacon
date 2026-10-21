@@ -79,7 +79,7 @@ export function resetBotClient() {
 
 // The bot resolves each channel's username once; the result is stored so it
 // never needs contacts.ResolveUsername again.
-async function getChannelPeer(client, config, channel) {
+export async function getChannelPeer(client, config, channel) {
   const handle = channel.telegram.toLowerCase();
   if (channelPeers.has(handle)) return channelPeers.get(handle);
   const key = `bot_channel:${tokenKey(config.botToken)}:${handle}`;
