@@ -70,7 +70,7 @@ test('llm: a list of providers falls through to the next when one is out of allo
     };
   };
   const r = await callLLM([], { providerName: 'groq,gemini', model: 'groq-only-model' });
-  assert.equal(r.content, 'from gemini-2.5-flash', 'gemini uses its own default model, not the groq override');
+  assert.equal(r.content, 'from gemini-flash-latest', 'gemini uses its own default model, not the groq override');
   assert.deepEqual(hosts, ['api.groq.com', 'generativelanguage.googleapis.com']);
   delete process.env.GEMINI_API_KEY;
 });
@@ -89,4 +89,23 @@ test('llm: OpenRouter-style "not a valid model" ids are skipped', async () => {
   };
   const r = await callLLM([], { providerName: 'openrouter', model: 'gone/model:free,good/model:free' });
   assert.equal(r.content, 'from good/model:free');
+});
+
+test('llm: a provider whose models all do not exist hands over to the next provider', async () => {
+  process.env.GEMINI_API_KEY = 'g';
+  process.env.OPENROUTER_API_KEY = 'o';
+  process.env.OPENROUTER_MODEL = 'free/model:free';
+  globalThis.fetch = async (url) => {
+    const gemini = url.includes('googleapis');
+    return {
+      ok: !gemini,
+      status: gemini ? 404 : 200,
+      text: async () => 'models/x is not found for API version v1beta',
+      json: async () => ({ choices: [{ message: { content: 'from openrouter' } }] }),
+    };
+  };
+  const r = await callLLM([], { providerName: 'gemini,openrouter' });
+  assert.equal(r.content, 'from openrouter');
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.OPENROUTER_MODEL;
 });

@@ -24,7 +24,7 @@ const PROVIDERS = {
     url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
     apiKeyEnv: 'GEMINI_API_KEY',
     modelEnv: 'GEMINI_MODEL',
-    defaultModel: 'gemini-2.5-flash,gemini-2.0-flash',
+    defaultModel: 'gemini-flash-latest,gemini-2.5-flash,gemini-2.0-flash',
     label: 'Gemini',
   },
   // Local, free, no API key: Ollama's OpenAI-compatible endpoint
@@ -63,7 +63,7 @@ export function stripThinking(content) {
 // A provider that can't take the request right now (out of its free
 // allowance, request too large for it, unreachable, no key): try the next.
 export function isProviderUnavailable(err) {
-  return /rate limit|429|413|402|quota|credits|not configured|every configured model|not a valid model|no endpoints found|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
+  return /rate limit|429|413|402|quota|credits|unavailable|not configured|every configured model|not a valid model|no endpoints found|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
 }
 
 // `providerName` may be a list, e.g. "groq,gemini": providers are tried in
@@ -131,7 +131,11 @@ async function callProvider(
       }
     }
   }
-  // Every model is out of its daily allowance ("rate limit" marks it systemic).
+  // Every model is out of its daily allowance or doesn't exist ("rate limit"
+  // / "unavailable" lets callLLM move on to the next provider).
+  if (lastError && !lastError.dailyLimit && lastError.status !== 413) {
+    throw new Error(`${provider.label} unavailable: none of the configured models can be used (${lastError.message.slice(0, 120)})`);
+  }
   throw lastError || new Error(`${provider.label} rate limit: every configured model reached its daily limit`);
 }
 
