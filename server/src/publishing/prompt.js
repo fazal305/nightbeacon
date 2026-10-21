@@ -42,7 +42,9 @@ export function buildDraftMessages({ item, targets }) {
     'Write a post about the report below for each channel listed, in English, matching THAT channel\'s house style exactly: ' +
       'length, structure, emoji use, capitalisation, hashtags and any recurring sign-off, as shown in its rules and examples.',
     'Use only facts stated in the report. Never invent details, numbers, names, places or times. Keep every figure exactly as reported.',
-    'If the report is an unconfirmed claim by one party, keep it attributed (e.g. "X claims", "according to Y") — do not present it as confirmed fact.',
+    'If the report is an unconfirmed claim by one party, keep it attributed to that party (e.g. "The IRGC claims…") — do not present it as confirmed fact.',
+    'Never say where the report came from: no Telegram channel names or @handles, no "reported by N channels", no "according to sources / local channels / media reports", ' +
+      'no links, no source or credit line. Name a person or organisation only when the news itself is their statement or claim.',
     `If the report is not news worth posting on a channel (an advert, a channel promotion, a greeting, too vague to state a fact, or off-topic for that channel), use exactly ${SKIP_TOKEN} for it.`,
   ];
   if (item.dedup_status === 'update') {
@@ -62,10 +64,9 @@ export function buildDraftMessages({ item, targets }) {
     item.translated_text && item.translated_text !== item.raw_text
       ? `English translation:\n${item.translated_text}\n\nOriginal text:\n${item.raw_text}`
       : `Report:\n${item.raw_text}`,
-    `Posted on Telegram: ${new Date(item.telegram_date).toISOString()}`,
+    `Time: ${new Date(item.telegram_date).toISOString()}`,
     item.category ? `Category: ${item.category}` : null,
     item.priority ? `Priority: ${item.priority}` : null,
-    item.story_item_count > 1 ? `Reported by ${item.story_item_count} channels.` : null,
   ]
     .filter(Boolean)
     .join('\n');

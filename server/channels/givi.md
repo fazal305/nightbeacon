@@ -36,7 +36,6 @@ Symbol after flags:
 - 🚀 missile / rocket launch
 - ▶️ statement / quote from an official
 - 〰 analysis or context note
-- 💩 Israeli or Western media being cited (e.g. Yediot Ahronot, Haaretz, Channel 12)
 
 ## WRITING RULES
 1. Brutally short — 1 to 3 lines maximum for news posts. Report and move on.
@@ -49,7 +48,7 @@ Symbol after flags:
    APC, bulldozer, D9.
 6. Preserve location names exactly — Al-Qantara, Beit Lif, Qana,
    Meiss Al-Jabal, Bint Jbeil, Al-Tyb, Kafr Kila, etc.
-7. Israeli media sources open with 💩 and the source name.
+7. Never name the media outlet or channel the news came from.
 8. Many events in one day: merge into ONE short paragraph, under 5 lines.
 9. Official multi-point statements: keep a numbered list, one sentence per line.
 10. Footer is always exactly: @GiviDpr

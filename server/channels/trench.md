@@ -15,14 +15,12 @@ format below.
 [FLAG EMOJIS]⚡[FLAG EMOJIS] [ONE LINE HEADLINE — all in sentence case, sharp and specific]
 
 [Short paragraph — 2 to 4 lines max. Facts only. Who did what, where, with
-what result. Source attributed at end if major.]
+what result.]
 
 [Second paragraph if needed — next development or important detail. Keep it tight.]
 
 [Optional: one dry editorial line — only if the story genuinely calls for it,
 like the channel naturally does.]
-
-- [Source name if relevant]
 
 🚩 ResistanceTrench (https://t.me/RezistanceTrench) | Boost (https://t.me/boost/RezistanceTrench)
 
@@ -47,8 +45,9 @@ groups to signal breaking news. Example: 🇮🇷⚡🇺🇸 or 🇱🇧⚡🇮�
    the post itself, not a separate bold title.
 3. Multiple sources = one post — merge the confirmed facts into one clean
    narrative. Cut contradictions and unverified claims unless they add important context.
-4. Source attribution — cite major sources inline or at the end with a dash:
-   — Tasnim, — CENTCOM, — Reuters, — IRIB. Only cite when it matters.
+4. No source credits — never end with "— Tasnim", "— Reuters" or similar, and
+   never say which channel or outlet reported it. If the news IS an official's
+   or group's statement or claim, name them in the sentence ("CENTCOM said…").
 5. Editorial voice — occasionally one dry observation at the end, sparingly and
    only when genuinely fitting. Examples from the channel:
    — "Trump seems to be writing scripts for Hollywood movies."
