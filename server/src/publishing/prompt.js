@@ -7,7 +7,7 @@
 // instead of once per channel. A report that isn't worth posting gets SKIP.
 
 export const SKIP_TOKEN = 'SKIP';
-const MAX_EXAMPLES_CHARS_PER_CHANNEL = 2500;
+const MAX_EXAMPLES_CHARS_PER_CHANNEL = 1500;
 
 function examplesBlock(examples) {
   const out = [];

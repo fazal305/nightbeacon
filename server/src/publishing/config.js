@@ -17,7 +17,7 @@ import path from 'node:path';
 //   styleGuide       your posting prompt for this channel
 //   styleGuideFile   …or a text file with it (path relative to the channels
 //                    file), easier for long prompts; re-read when it changes
-//   styleExamples    how many recent channel posts to show the model (default 6)
+//   styleExamples    how many recent channel posts to show the model (default 4)
 //   maxPerHour       automatic drafts per hour for this channel (default
 //                    PUBLISH_MAX_PER_HOUR, 6); each slot goes to the
 //                    best-scoring story (see drafter.js)
@@ -112,7 +112,7 @@ export function normalizeChannels(rawChannels, defaults) {
       draftPriorities: list(c.draftPriorities, defaults.draftPriorities),
       autoPriorities: delivery === 'bot' ? list(c.autoPriorities, defaults.autoPriorities) : [],
       styleGuide: c.styleGuide || '',
-      styleExamples: Number(c.styleExamples ?? 6),
+      styleExamples: Number(c.styleExamples ?? 4),
       maxPerHour: Number(c.maxPerHour ?? defaults.maxPerHour),
       minGapMinutes: Number(c.minGapMinutes ?? 30 / Math.max(Number(c.maxPerHour ?? defaults.maxPerHour), 1)),
       settleMinutes: Number(c.settleMinutes ?? defaults.settleMinutes),

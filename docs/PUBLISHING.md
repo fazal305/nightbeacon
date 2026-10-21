@@ -139,6 +139,9 @@ posted automatically; it waits for review with a note.
   an hour and the next is used; unknown model ids are skipped. Keep
   translation off Groq (`TRANSLATION_PROVIDER=telegram,google,lingva`) so the
   whole budget goes to drafting.
+  `DRAFT_LLM_PROVIDER` can list providers too — `groq,gemini` falls back to
+  Google Gemini (free key at aistudio.google.com) when every Groq model is
+  out of its daily allowance or a request is too large for it.
 - **Which stories**: each channel gets at most `PUBLISH_MAX_PER_HOUR` (6)
   automatic drafts an hour (`maxPerHour`), spread at least `minGapMinutes`
   apart (default: 5 min at 6/hour). Each slot goes to the best-scoring

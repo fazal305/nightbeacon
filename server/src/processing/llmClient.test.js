@@ -53,3 +53,24 @@ test('llm: unknown models are skipped; a per-minute 429 is not treated as daily;
   assert.equal(isDailyLimit(429, 'tokens per minute (TPM)'), false);
   assert.equal(stripThinking('<think>plan</think>\n\nPost text'), 'Post text');
 });
+
+test('llm: a list of providers falls through to the next when one is out of allowance', async () => {
+  process.env.GROQ_API_KEY = 'k';
+  process.env.GEMINI_API_KEY = 'g';
+  const hosts = [];
+  globalThis.fetch = async (url, init) => {
+    hosts.push(new URL(url).hostname);
+    const { model } = JSON.parse(init.body);
+    const groq = url.includes('groq');
+    return {
+      ok: !groq,
+      status: groq ? 429 : 200,
+      text: async () => 'Rate limit reached on tokens per day (TPD)',
+      json: async () => ({ choices: [{ message: { content: `from ${model}` } }] }),
+    };
+  };
+  const r = await callLLM([], { providerName: 'groq,gemini', model: 'groq-only-model' });
+  assert.equal(r.content, 'from gemini-2.5-flash', 'gemini uses its own default model, not the groq override');
+  assert.deepEqual(hosts, ['api.groq.com', 'generativelanguage.googleapis.com']);
+  delete process.env.GEMINI_API_KEY;
+});

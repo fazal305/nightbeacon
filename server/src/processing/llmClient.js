@@ -17,6 +17,16 @@ const PROVIDERS = {
     modelEnv: 'OPENROUTER_MODEL',
     label: 'OpenRouter',
   },
+  // Google Gemini's OpenAI-compatible endpoint. Free key (no card) at
+  // https://aistudio.google.com/apikey — a much larger free allowance than
+  // Groq's, so it's a good fallback: DRAFT_LLM_PROVIDER=groq,gemini.
+  gemini: {
+    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    apiKeyEnv: 'GEMINI_API_KEY',
+    modelEnv: 'GEMINI_MODEL',
+    defaultModel: 'gemini-2.5-flash,gemini-2.0-flash',
+    label: 'Gemini',
+  },
   // Local, free, no API key: Ollama's OpenAI-compatible endpoint
   // (`ollama pull qwen2.5:7b`, then OLLAMA_MODEL=qwen2.5:7b).
   ollama: {
@@ -35,7 +45,7 @@ const DAILY_LIMIT_COOLDOWN_MS = 60 * 60 * 1000;
 const modelBlockedUntil = new Map(); // "provider:model" -> timestamp
 
 export function isDailyLimit(status, body) {
-  return status === 429 && /per day|TPD|RPD|free-models-per-day/i.test(body);
+  return status === 429 && /per ?day|TPD|RPD|free-models-per-day/i.test(body);
 }
 
 // Reasoning models (e.g. qwen3) may prefix the answer with <think>…</think>.
@@ -50,7 +60,34 @@ export function stripThinking(content) {
 // `providerName` lets a stage use its own provider (e.g. drafting via
 // DRAFT_LLM_PROVIDER) independently of LLM_PROVIDER; `model` overrides the
 // provider's model env (one id or a comma-separated list).
-export async function callLLM(
+// A provider that can't take the request right now (out of its free
+// allowance, request too large for it, unreachable, no key): try the next.
+export function isProviderUnavailable(err) {
+  return /rate limit|429|413|quota|not configured|every configured model|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
+}
+
+// `providerName` may be a list, e.g. "groq,gemini": providers are tried in
+// order and the next one takes over when one is unavailable. `model`
+// applies to the first provider; the others use their own model setting.
+export async function callLLM(messages, opts = {}) {
+  const names = String(opts.providerName || process.env.LLM_PROVIDER || 'groq')
+    .split(',')
+    .map((n) => n.trim().toLowerCase())
+    .filter(Boolean);
+  let lastError = null;
+  for (let i = 0; i < names.length; i++) {
+    try {
+      return await callProvider(messages, { ...opts, providerName: names[i], model: i === 0 ? opts.model : undefined });
+    } catch (err) {
+      lastError = err;
+      if (i === names.length - 1 || !isProviderUnavailable(err)) throw err;
+      console.warn(`[llm] ${names[i]} unavailable (${err.message.slice(0, 80)}) — using ${names[i + 1]}`);
+    }
+  }
+  throw lastError;
+}
+
+async function callProvider(
   messages,
   { providerName = process.env.LLM_PROVIDER || 'groq', temperature = 0.2, model: modelOverride } = {}
 ) {
@@ -62,7 +99,7 @@ export async function callLLM(
   }
 
   const apiKey = provider.apiKeyEnv ? process.env[provider.apiKeyEnv] : null;
-  const models = String(modelOverride || process.env[provider.modelEnv] || '')
+  const models = String(modelOverride || process.env[provider.modelEnv] || provider.defaultModel || '')
     .split(',')
     .map((m) => m.trim())
     .filter(Boolean);
