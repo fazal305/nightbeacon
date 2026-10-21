@@ -59,7 +59,11 @@ Target channels are configured in `server/channels/channels.json`:
   (bypasses the hourly cap).
 
 Drafting uses an LLM rotation across Groq, Gemini, Cerebras, Mistral,
-OpenRouter and Ollama, and across several models within each provider.
+GitHub Models, NVIDIA, SambaNova, Cohere, OpenRouter, Cloudflare, Hugging
+Face, Ollama and keyless Pollinations as the last resort, and across several
+models within each provider (providers without a key are skipped).
+`npm run publish:drain` clears a queue of posts waiting to be drafted with
+all of them in parallel.
 See [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
 
 ## Translation providers
@@ -92,6 +96,7 @@ Useful commands (in `server/`):
 | `npm run publish:check` | Posting status: config, queue, pace, next post time, bot admin rights |
 | `npm run translate:check` | Tests each translator / LLM key |
 | `npm run translate:drain` | Clears the translation backlog |
+| `npm run publish:drain` | Clears the queue of posts waiting to be drafted |
 | `npm run sources:list` | Lists monitored sources |
 | `npm run sources:discover` → `npm run sources:add` | Finds candidate channels (similar channels, folders, mentions), then adds the ones you keep |
 | `npm run sources:official` | Builds `official-sources.md` from a Telegram folder link |

@@ -43,6 +43,67 @@ const PROVIDERS = {
     defaultModel: 'mistral-small-latest,open-mistral-nemo',
     label: 'Mistral',
   },
+  // GitHub Models: free with a GitHub token (Settings → Developer settings →
+  // Personal access tokens → fine-grained, permission "Models: read").
+  github: {
+    url: 'https://models.github.ai/inference/chat/completions',
+    apiKeyEnv: 'GITHUB_MODELS_TOKEN',
+    modelEnv: 'GITHUB_MODELS_MODEL',
+    defaultModel: 'openai/gpt-4.1-mini,openai/gpt-4o-mini,meta/Llama-3.3-70B-Instruct',
+    label: 'GitHub Models',
+  },
+  // NVIDIA NIM: free developer access. Key at https://build.nvidia.com
+  nvidia: {
+    url: 'https://integrate.api.nvidia.com/v1/chat/completions',
+    apiKeyEnv: 'NVIDIA_API_KEY',
+    modelEnv: 'NVIDIA_MODEL',
+    defaultModel: 'meta/llama-3.3-70b-instruct,meta/llama-3.1-8b-instruct',
+    label: 'NVIDIA',
+  },
+  // SambaNova Cloud: free tier. Key at https://cloud.sambanova.ai
+  sambanova: {
+    url: 'https://api.sambanova.ai/v1/chat/completions',
+    apiKeyEnv: 'SAMBANOVA_API_KEY',
+    modelEnv: 'SAMBANOVA_MODEL',
+    defaultModel: 'Meta-Llama-3.3-70B-Instruct,Meta-Llama-3.1-8B-Instruct',
+    label: 'SambaNova',
+  },
+  // Cohere: free trial key (1,000 calls a month) at https://dashboard.cohere.com
+  cohere: {
+    url: 'https://api.cohere.ai/compatibility/v1/chat/completions',
+    apiKeyEnv: 'COHERE_API_KEY',
+    modelEnv: 'COHERE_MODEL',
+    defaultModel: 'command-a-03-2025,command-r-08-2024',
+    label: 'Cohere',
+  },
+  // Cloudflare Workers AI: same account ID and token as the translator
+  // (daily free allowance shared with it).
+  cloudflare: {
+    url: () => `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`,
+    apiKeyEnv: 'CLOUDFLARE_API_TOKEN',
+    extraEnv: ['CLOUDFLARE_ACCOUNT_ID'],
+    modelEnv: 'CLOUDFLARE_LLM_MODEL',
+    defaultModel: '@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/meta/llama-3.1-8b-instruct',
+    label: 'Cloudflare',
+  },
+  // Hugging Face inference router: same HF_TOKEN as the translator (small
+  // monthly free credit).
+  huggingface: {
+    url: 'https://router.huggingface.co/v1/chat/completions',
+    apiKeyEnv: 'HF_TOKEN',
+    modelEnv: 'HF_LLM_MODEL',
+    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct,Qwen/Qwen2.5-72B-Instruct',
+    label: 'Hugging Face',
+  },
+  // Pollinations: free, no key at all — slow and rate-limited, so it is the
+  // last resort that keeps drafting going when every quota is spent.
+  pollinations: {
+    url: 'https://text.pollinations.ai/openai',
+    apiKeyEnv: null,
+    modelEnv: 'POLLINATIONS_MODEL',
+    defaultModel: 'openai,mistral',
+    label: 'Pollinations',
+  },
   // Local, free, no API key: Ollama's OpenAI-compatible endpoint
   // (`ollama pull qwen2.5:7b`, then OLLAMA_MODEL=qwen2.5:7b).
   ollama: {
@@ -79,7 +140,7 @@ export function stripThinking(content) {
 // A provider that can't take the request right now (out of its free
 // allowance, request too large for it, unreachable, no key): try the next.
 export function isProviderUnavailable(err) {
-  return /rate limit|429|413|402|quota|credits|unavailable|not configured|every configured model|not a valid model|no endpoints found|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
+  return /rate limit|429|413|402|\((401|403|5\d\d)\)|quota|credits|returned no content|unavailable|not configured|every configured model|not a valid model|no endpoints found|fetch failed|timeout|aborted|ECONN/i.test(err?.message || '');
 }
 
 // `providerName` may be a list, e.g. "groq,gemini": providers are tried in
@@ -120,8 +181,9 @@ async function callProvider(
     .map((m) => m.trim())
     .filter(Boolean);
 
-  if ((provider.apiKeyEnv && !apiKey) || models.length === 0) {
-    throw new Error(`${[provider.apiKeyEnv, provider.modelEnv].filter(Boolean).join(' / ')} not configured`);
+  const missingExtra = (provider.extraEnv || []).some((name) => !process.env[name]);
+  if ((provider.apiKeyEnv && !apiKey) || missingExtra || models.length === 0) {
+    throw new Error(`${[provider.apiKeyEnv, ...(provider.extraEnv || []), provider.modelEnv].filter(Boolean).join(' / ')} not configured`);
   }
 
   let lastError = null;
@@ -193,4 +255,13 @@ async function callModel(provider, providerName, apiKey, model, messages, temper
     throw new Error(`${provider.label} returned no content`);
   }
   return { content: stripThinking(content), model };
+}
+
+// Whether a provider has what it needs (key and model) to be tried at all.
+export function providerConfigured(name) {
+  const provider = PROVIDERS[String(name).toLowerCase()];
+  if (!provider) return false;
+  if (provider.apiKeyEnv && !process.env[provider.apiKeyEnv]) return false;
+  if ((provider.extraEnv || []).some((env) => !process.env[env])) return false;
+  return Boolean(process.env[provider.modelEnv] || provider.defaultModel);
 }

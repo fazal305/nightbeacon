@@ -45,6 +45,11 @@ function list(value, fallback) {
 
 let fileCache = { path: null, mtimeMs: 0, channels: null };
 
+// Every free drafting provider, best first. Ones without a key are skipped
+// instantly, so the list can name them all.
+const DEFAULT_DRAFT_PROVIDERS =
+  'groq,gemini,cerebras,mistral,github,nvidia,sambanova,cohere,openrouter,cloudflare,huggingface,pollinations';
+
 const guideCache = new Map(); // path -> { mtimeMs, text }
 
 function readGuideFile(channelsFile, relPath, key) {
@@ -208,7 +213,7 @@ export function publishConfig(env = process.env) {
     // Automatic drafts/posts about news older than this are skipped/expired;
     // posts you approve yourself are always sent.
     maxAgeMinutes: Number(env.PUBLISH_MAX_AGE_MINUTES || 120),
-    draftProvider: (env.DRAFT_LLM_PROVIDER || env.LLM_PROVIDER || 'groq').toLowerCase(),
+    draftProvider: (env.DRAFT_LLM_PROVIDER || env.LLM_PROVIDER || DEFAULT_DRAFT_PROVIDERS).toLowerCase(),
     // One model id or a comma-separated list (each Groq model has its own
     // daily allowance); empty = the provider's usual model env (GROQ_MODEL…).
     draftModel: (env.DRAFT_LLM_MODEL || '').trim(),

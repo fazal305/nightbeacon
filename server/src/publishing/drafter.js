@@ -1,5 +1,5 @@
 import { pool } from '../db/pool.js';
-import { callLLM } from '../processing/llmClient.js';
+import { callLLM, isProviderUnavailable } from '../processing/llmClient.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
@@ -19,15 +19,16 @@ const CLAIM_LIMIT = 15;
 const MAX_ATTEMPTS = 3;
 let gate = null;
 
-function isSystemic(message) {
-  return /rate limit|too many requests|429|quota|free-models-per-day|not configured|fetch failed|ECONNREFUSED|timeout|aborted/i.test(
-    message || ''
+export function isSystemic(message) {
+  return (
+    /rate limit|too many requests|429|quota|free-models-per-day|not configured|fetch failed|ECONNREFUSED|timeout|aborted/i.test(message || '') ||
+    isProviderUnavailable({ message })
   );
 }
 
 // Automatic drafts for news that got too old while waiting (e.g. the LLM
 // was out of quota) are dropped instead of spending tokens on stale news.
-async function expireStaleRequests(config) {
+export async function expireStaleRequests(config) {
   // Queued before scored selection existed (no score): drop rather than
   // draft and post that whole backlog.
   await pool.query(
@@ -137,7 +138,7 @@ async function queueAutomaticDrafts(config) {
 
 // Claims whole posts (all their requested channels together), manual
 // requests first, newest first.
-async function claimRequested() {
+export async function claimRequested(limit = CLAIM_LIMIT) {
   const { rows } = await pool.query(
     `UPDATE publications SET status = 'drafting', updated_at = now()
      WHERE id IN (
@@ -151,7 +152,7 @@ async function claimRequested() {
        FOR UPDATE SKIP LOCKED
      )
      RETURNING id, raw_item_id, channel_key, origin`,
-    [CLAIM_LIMIT]
+    [limit]
   );
   const groups = new Map();
   for (const r of rows) {
@@ -207,7 +208,7 @@ async function saveDraft(pub, channel, item, draft, model, config) {
   return autoApprove ? 'approved' : 'drafted';
 }
 
-async function failPublications(pubs, message, systemic) {
+export async function failPublications(pubs, message, systemic) {
   const ids = pubs.map((p) => p.id);
   await pool.query(
     systemic
@@ -232,69 +233,80 @@ export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext
   const results = [...digests];
 
   for (let g = 0; g < groups.length; g++) {
-    const group = groups[g];
-    // Channels removed from the config since the request was made.
-    const known = group.filter((p) => channelByKey(config, p.channel_key));
-    const orphaned = group.filter((p) => !channelByKey(config, p.channel_key));
-    if (orphaned.length) {
-      await pool.query(
-        `UPDATE publications SET status = 'rejected', last_error = 'channel is no longer configured', updated_at = now() WHERE id = ANY($1)`,
-        [orphaned.map((p) => p.id)]
-      );
-    }
-    if (known.length === 0) continue;
-
-    const item = await loadItem(known[0].raw_item_id);
-    const targets = [];
-    for (const pub of known) {
-      const channel = channelByKey(config, pub.channel_key);
-      targets.push({ pub, channel, style: await styleFn(channel) });
-    }
-
-    try {
-      await gate.wait();
-      const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules }), {
-        providerName: config.draftProvider,
-        model: config.draftModel || undefined,
-        temperature: 0.4,
-      });
-      let drafts;
-      if (targets.length === 1) {
-        drafts = new Map([[targets[0].channel.key, parseDraft(content)]]);
-      } else {
-        try {
-          drafts = parseMultiDraft(content, targets.map((t) => t.channel.key));
-        } catch {
-          drafts = new Map();
-        }
+    await gate.wait();
+    const outcome = await draftGroup(groups[g], config, { llm, styleFn });
+    results.push(...outcome.results);
+    if (outcome.systemic) {
+      // Provider down / out of quota: put the rest back untouched.
+      const rest = groups.slice(g + 1).flat().map((p) => p.id);
+      if (rest.length) {
+        await pool.query(`UPDATE publications SET status = 'requested', updated_at = now() WHERE id = ANY($1)`, [rest]);
       }
-      const missing = [];
-      for (const t of targets) {
-        const draft = drafts.get(t.channel.key);
-        if (!draft) {
-          missing.push(t.pub);
-          continue;
-        }
-        results.push({ id: t.pub.id, outcome: await saveDraft(t.pub, t.channel, item, draft, model, config) });
-      }
-      if (missing.length) {
-        // The model left these channels out: retry them (counts as an attempt).
-        await failPublications(missing, 'model reply did not include this channel', false);
-        for (const p of missing) results.push({ id: p.id, outcome: 'failed', error: 'missing from reply' });
-      }
-    } catch (err) {
-      const systemic = isSystemic(err.message);
-      await failPublications(known, err.message, systemic);
-      results.push({ id: known[0].id, outcome: 'failed', error: err.message, systemic });
-      if (systemic) {
-        // Provider down / out of quota: put the rest back untouched.
-        const rest = groups.slice(g + 1).flat().map((p) => p.id);
-        if (rest.length) {
-          await pool.query(`UPDATE publications SET status = 'requested', updated_at = now() WHERE id = ANY($1)`, [rest]);
-        }
-        break;
-      }
+      break;
     }
   }
   return results;
+}
+
+// Drafts one claimed post for all its requested channels. `providerName`
+// overrides the configured provider list (the drafting drain gives each
+// provider its own worker). Returns { results, systemic } — systemic means
+// the provider(s) couldn't take it and the post went back to the queue.
+export async function draftGroup(group, config, { llm = callLLM, styleFn = getStyleContext, providerName } = {}) {
+  const results = [];
+  // Channels removed from the config since the request was made.
+  const known = group.filter((p) => channelByKey(config, p.channel_key));
+  const orphaned = group.filter((p) => !channelByKey(config, p.channel_key));
+  if (orphaned.length) {
+    await pool.query(
+      `UPDATE publications SET status = 'rejected', last_error = 'channel is no longer configured', updated_at = now() WHERE id = ANY($1)`,
+      [orphaned.map((p) => p.id)]
+    );
+  }
+  if (known.length === 0) return { results, systemic: false };
+
+  const item = await loadItem(known[0].raw_item_id);
+  const targets = [];
+  for (const pub of known) {
+    const channel = channelByKey(config, pub.channel_key);
+    targets.push({ pub, channel, style: await styleFn(channel) });
+  }
+
+  try {
+    const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules }), {
+      providerName: providerName || config.draftProvider,
+      model: providerName ? undefined : config.draftModel || undefined,
+      temperature: 0.4,
+    });
+    let drafts;
+    if (targets.length === 1) {
+      drafts = new Map([[targets[0].channel.key, parseDraft(content)]]);
+    } else {
+      try {
+        drafts = parseMultiDraft(content, targets.map((t) => t.channel.key));
+      } catch {
+        drafts = new Map();
+      }
+    }
+    const missing = [];
+    for (const t of targets) {
+      const draft = drafts.get(t.channel.key);
+      if (!draft) {
+        missing.push(t.pub);
+        continue;
+      }
+      results.push({ id: t.pub.id, outcome: await saveDraft(t.pub, t.channel, item, draft, model, config) });
+    }
+    if (missing.length) {
+      // The model left these channels out: retry them (counts as an attempt).
+      await failPublications(missing, 'model reply did not include this channel', false);
+      for (const p of missing) results.push({ id: p.id, outcome: 'failed', error: 'missing from reply' });
+    }
+    return { results, systemic: false };
+  } catch (err) {
+    const systemic = isSystemic(err.message);
+    await failPublications(known, err.message, systemic);
+    results.push({ id: known[0].id, outcome: 'failed', error: err.message, systemic });
+    return { results, systemic };
+  }
 }
