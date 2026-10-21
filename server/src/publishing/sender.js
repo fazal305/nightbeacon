@@ -9,6 +9,13 @@ import { sendToChannel, resetBotClient } from './botClient.js';
 // limits for bots posting to channels). A flood-wait pauses sending for its
 // full duration. Automatic posts about news older than PUBLISH_MAX_AGE_MINUTES
 // expire instead of going out late; posts the operator approved are always sent.
+//
+// Automatic posts also respect each channel's maxPerHour and minGapMinutes,
+// counted over everything published there — so however many drafts pile
+// up (e.g. a backlog drafted at once after an LLM outage), the channel
+// gets at most maxPerHour automatic posts an hour, spread out, best score
+// first; the rest expire at PUBLISH_MAX_AGE_MINUTES. Posts the operator
+// approved go out regardless.
 const MAX_ATTEMPTS = 3;
 let gate = null;
 
@@ -39,9 +46,24 @@ export async function runPublishingTick({ send = sendToChannel } = {}) {
   if (g.isPaused()) return [];
   await expireStale(config);
 
-  const { rows: waiting } = await pool.query(
-    `SELECT 1 FROM publications WHERE status = 'approved' AND channel_key = ANY($1) LIMIT 1`,
+  // Channels with room for an automatic post right now.
+  const { rows: recent } = await pool.query(
+    `SELECT channel_key, count(*)::int AS n, max(published_at) AS last_at FROM publications
+     WHERE status = 'published' AND channel_key = ANY($1) AND published_at > now() - interval '1 hour'
+     GROUP BY channel_key`,
     [botKeys]
+  );
+  const autoKeys = botKeys.filter((key) => {
+    const ch = channelByKey(config, key);
+    const r = recent.find((x) => x.channel_key === key);
+    if (!r) return true;
+    return r.n < ch.maxPerHour && Date.now() - new Date(r.last_at).getTime() >= ch.minGapMinutes * 60_000;
+  });
+
+  const { rows: waiting } = await pool.query(
+    `SELECT 1 FROM publications WHERE status = 'approved' AND channel_key = ANY($1)
+       AND (origin = 'manual' OR channel_key = ANY($2)) LIMIT 1`,
+    [botKeys, autoKeys]
   );
   if (waiting.length === 0) return [];
 
@@ -50,9 +72,11 @@ export async function runPublishingTick({ send = sendToChannel } = {}) {
   const { rows } = await pool.query(
     `UPDATE publications SET status = 'sending', updated_at = now()
      WHERE id = (SELECT id FROM publications WHERE status = 'approved' AND channel_key = ANY($1)
-                 ORDER BY approved_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
+                   AND (origin = 'manual' OR channel_key = ANY($2))
+                 ORDER BY (origin = 'manual') DESC, score DESC NULLS LAST, approved_at, id
+                 LIMIT 1 FOR UPDATE SKIP LOCKED)
      RETURNING id, final_text, channel_key`,
-    [botKeys]
+    [botKeys, autoKeys]
   );
   const pub = rows[0];
   if (!pub) return [];

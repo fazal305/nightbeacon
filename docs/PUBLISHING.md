@@ -115,6 +115,10 @@ Manual channels are never posted by the bot, in any mode.
 
 - The bot sends **one post at a time, at least `PUBLISH_MIN_INTERVAL_SECONDS`
   (35) apart**, across all bot channels.
+- **Automatic** posts are also held to each channel's `maxPerHour` and
+  `minGapMinutes` **at send time**, counting everything published there, so a
+  pile of approved drafts can never burst out; the best-scoring go first and
+  the rest expire. Posts you approve yourself go out regardless.
 - A Telegram flood-wait pauses the bot for the **full** time Telegram asks;
   the post is requeued, not lost.
 - Automatic posts about news older than `PUBLISH_MAX_AGE_MINUTES` (120)

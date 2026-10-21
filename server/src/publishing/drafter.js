@@ -24,6 +24,12 @@ function isSystemic(message) {
 // Automatic drafts for news that got too old while waiting (e.g. the LLM
 // was out of quota) are dropped instead of spending tokens on stale news.
 async function expireStaleRequests(config) {
+  // Queued before scored selection existed (no score): drop rather than
+  // draft and post that whole backlog.
+  await pool.query(
+    `UPDATE publications SET status = 'expired', last_error = 'queued before story selection; not drafted', updated_at = now()
+     WHERE status IN ('requested', 'approved') AND origin = 'auto' AND score IS NULL`
+  );
   await pool.query(
     `UPDATE publications p SET status = 'expired', last_error = 'news too old by the time it could be drafted', updated_at = now()
      FROM raw_items ri

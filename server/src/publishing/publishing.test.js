@@ -238,6 +238,7 @@ test('LLM out of quota: drafts go back to the queue without using attempts', asy
 });
 
 test('sender: only bot channels are sent; flood-wait pauses and requeues; stale automatic posts expire; operator-approved stale posts still go', async () => {
+  setChannels([{ ...MAIN, minGapMinutes: 0 }, ALERTS]);
   const fresh = await readyItem();
   const stale = await readyItem({ minutesAgo: 600 });
   const staleManual = await readyItem({ minutesAgo: 600 });
@@ -263,6 +264,43 @@ test('sender: only bot channels are sent; flood-wait pauses and requeues; stale 
   assert.equal((await pubFor(fresh)).status, 'published');
   assert.equal((await pubFor(staleManual)).status, 'published');
   assert.equal((await pubFor(fresh, 'alerts')).status, 'approved', 'manual channel is never sent by the bot');
+});
+
+test('sender: automatic posts keep to maxPerHour and minGapMinutes, best score first; operator-approved posts go anyway', async () => {
+  setChannels([{ ...MAIN, maxPerHour: 2, minGapMinutes: 10 }, ALERTS]);
+  const ids = [];
+  for (let i = 0; i < 4; i++) ids.push(await readyItem());
+  await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at, score) VALUES
+       ($1, 'main', 'approved', 'auto', 'low score', now(), 5), ($2, 'main', 'approved', 'auto', 'top score', now(), 30),
+       ($3, 'main', 'approved', 'auto', 'mid score', now(), 12)`,
+    ids.slice(0, 3)
+  );
+  const sent = [];
+  const send = async (t) => (sent.push(t), { messageId: sent.length });
+  await runPublishingTick({ send });
+  await runPublishingTick({ send });
+  assert.deepEqual(sent, ['top score'], 'second automatic post waits for the 10-minute gap');
+
+  await pool.query(`UPDATE publications SET published_at = published_at - interval '11 minutes' WHERE status = 'published'`);
+  await runPublishingTick({ send });
+  await pool.query(`UPDATE publications SET published_at = published_at - interval '11 minutes' WHERE status = 'published'`);
+  await runPublishingTick({ send });
+  assert.deepEqual(sent, ['top score', 'mid score'], '2 per hour reached');
+
+  await pool.query(
+    `INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'operator approved', now())`,
+    [ids[3]]
+  );
+  await runPublishingTick({ send });
+  assert.equal(sent.at(-1), 'operator approved');
+});
+
+test('drafter: automatic drafts queued before scored selection (no score) are expired, not posted', async () => {
+  const item = await readyItem();
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, origin, status, final_text) VALUES ($1, 'main', 'auto', 'approved', 'old')`, [item]);
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  assert.equal((await pubFor(item)).status, 'expired');
 });
 
 test('sender: a real Telegram error (bot not admin) fails the post after 3 attempts', async () => {
