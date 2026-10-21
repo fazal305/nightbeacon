@@ -24,8 +24,10 @@ ready-to-copy drafts for the rest.
    Every 10 minutes the proxies are speed-tested: the connection moves to a
    clearly faster one, and when fewer than 3 answer, new links are fetched
    from @mtpro_xyz_bot (`PROXY_BOT`) and saved to `server/proxies-found.txt`.
-2. **Dedup before translation** — exact, fuzzy and optional cross-language
-   semantic matching group relays of the same report into one *story*;
+2. **Dedup before translation** — exact hash, in-memory MinHash (catches
+   relays that add their own header/footer), trigram and optional
+   cross-language semantic matching (a small multilingual model such as
+   `paraphrase-multilingual` via Ollama) group relays of the same report into one *story*;
    reports that add new figures are kept as story updates.
 3. **Classify first** — the original text gets a priority guess from keyword
    lists in Arabic, Persian, Russian, Ukrainian, Hebrew, Turkish, Urdu and

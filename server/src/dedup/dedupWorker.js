@@ -2,6 +2,7 @@ import { pool } from '../db/pool.js';
 import { normalizeText, contentHash, extractNumbers, MIN_FUZZY_LENGTH } from './normalize.js';
 import { embedTexts, embeddingConfig, cosine } from './embeddings.js';
 import { decide, dedupThresholds } from './decide.js';
+import { MinHashIndex, signature } from './minhash.js';
 
 // Stage B + C of the pipeline: runs on the ORIGINAL text, before any
 // translation or LLM call, so a story reported by twenty channels is
@@ -65,6 +66,45 @@ function pruneSemanticIndex(t) {
       semanticIndex.stories.delete(s.id);
     }
   }
+}
+
+// In-memory MinHash index of recent stories (minhash.js), rebuilt from
+// stories.normalized_text at startup and kept in sync as stories change.
+const minhashIndex = { loaded: false, index: new MinHashIndex() };
+const MINHASH_MAX_STORIES = Number(process.env.DEDUP_MINHASH_MAX_STORIES || 30000);
+
+export function _resetMinhashIndex() {
+  minhashIndex.loaded = false;
+  minhashIndex.index = new MinHashIndex();
+}
+
+async function ensureMinhashIndex(client, t) {
+  const idx = minhashIndex.index;
+  if (minhashIndex.loaded) {
+    // Drop stories that left the matching window.
+    const cutoff = Date.now() - t.fuzzyWindowHours * 3_600_000;
+    for (const [id, e] of idx.entries) if (new Date(e.meta.last_seen_at).getTime() < cutoff) idx.remove(id);
+    return;
+  }
+  const { rows } = await client.query(
+    `SELECT id, normalized_text, numbers, first_seen_at, last_seen_at FROM stories
+     WHERE last_seen_at >= now() - make_interval(hours => $1) AND length(normalized_text) >= $2
+     ORDER BY last_seen_at DESC LIMIT $3`,
+    [t.fuzzyWindowHours, MIN_FUZZY_LENGTH, MINHASH_MAX_STORIES]
+  );
+  for (const r of rows) {
+    idx.add(Number(r.id), signature(r.normalized_text), { id: Number(r.id), numbers: r.numbers, first_seen_at: r.first_seen_at, last_seen_at: r.last_seen_at });
+  }
+  minhashIndex.loaded = true;
+}
+
+function bestMinhashMatch(mh, item, t) {
+  const at = new Date(item.telegram_date).getTime();
+  const windowMs = t.fuzzyWindowHours * 3_600_000;
+  const hit = minhashIndex.index.best(mh, (meta) => Math.abs(new Date(meta.last_seen_at).getTime() - at) <= windowMs);
+  if (!hit) return null;
+  const other = minhashIndex.index.entries.get(hit.id).mh;
+  return { story: hit.meta, jaccard: hit.jaccard, containment: hit.containment, shorter: Math.min(mh.size, other.size) };
 }
 
 function bestSemanticMatch(embedding) {
@@ -165,15 +205,28 @@ async function processItem(client, item, embedding, model, t) {
   const longEnough = normalized.length >= MIN_FUZZY_LENGTH;
 
   const exact = await findExact(client, item, hash);
-  const fuzzy = !exact && longEnough ? await findFuzzy(client, item, normalized, t) : null;
+  const mh = longEnough ? signature(normalized) : null;
+  const minhash = !exact && mh ? bestMinhashMatch(mh, item, t) : null;
+  const preliminary = decide({ item: { telegramDate: item.telegram_date, numbers }, exact, minhash }, t);
+  // The trigram query only when MinHash found nothing conclusive.
+  const fuzzy = !exact && longEnough && preliminary.decision === 'unique' ? await findFuzzy(client, item, normalized, t) : null;
   const semantic = !exact && longEnough && embedding ? bestSemanticMatch(embedding) : null;
 
-  const result = decide({ item: { telegramDate: item.telegram_date, numbers }, exact, fuzzy, semantic }, t);
+  const result = decide({ item: { telegramDate: item.telegram_date, numbers }, exact, minhash, fuzzy, semantic }, t);
 
   await client.query('BEGIN');
   try {
     const applied = await applyDecision(client, item, { normalized, hash, numbers }, result, embedding, model);
     await client.query('COMMIT');
+
+    const meta = {
+      id: applied.storyId,
+      numbers: applied.story.numbers,
+      first_seen_at: applied.story.first_seen_at,
+      last_seen_at: applied.story.last_seen_at,
+    };
+    if (result.decision === 'unique' && mh) minhashIndex.index.add(applied.storyId, mh, meta);
+    else minhashIndex.index.update(applied.storyId, meta);
 
     if (embedding || semanticIndex.stories.has(applied.storyId)) {
       const prev = semanticIndex.stories.get(applied.storyId);
@@ -213,6 +266,7 @@ export async function runDedupTick({ embed = embedTexts } = {}) {
         [BATCH_SIZE]
       );
       if (items.length === 0) return [];
+      await ensureMinhashIndex(client, t);
 
       // Embeddings only for recent posts long enough to compare; old
       // backlog gets the cheap checks only (its contemporaries have long

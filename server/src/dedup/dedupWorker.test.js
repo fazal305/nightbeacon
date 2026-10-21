@@ -1,7 +1,7 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { pool } from '../db/pool.js';
-import { runDedupTick, _resetSemanticIndex } from './dedupWorker.js';
+import { runDedupTick, _resetSemanticIndex, _resetMinhashIndex } from './dedupWorker.js';
 import { runTranslationTick } from '../processing/translate.js';
 import { l2normalize } from './embeddings.js';
 
@@ -46,6 +46,7 @@ before(async () => {
 beforeEach(() => {
   delete process.env.EMBEDDING_PROVIDER;
   _resetSemanticIndex();
+  _resetMinhashIndex();
 });
 
 after(async () => {
@@ -99,7 +100,7 @@ test('near-duplicate with an updated casualty figure is recorded as an update to
   const a = await getItem(first);
   const u = await getItem(update);
   assert.equal(u.dedup_status, 'update');
-  assert.equal(u.dedup_method, 'fuzzy');
+  assert.equal(u.dedup_method, 'minhash', 'caught in memory, before the trigram query');
   assert.equal(u.story_id, a.story_id);
   assert.equal(u.status, 'new', 'updates continue to translation/classification');
 

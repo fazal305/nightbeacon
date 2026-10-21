@@ -24,6 +24,12 @@ export function dedupThresholds() {
     exactWindowHours: num('DEDUP_EXACT_WINDOW_HOURS', 72),
     fuzzyWindowHours: num('DEDUP_FUZZY_WINDOW_HOURS', 24),
     fuzzyDuplicate: num('DEDUP_FUZZY_THRESHOLD', 0.75),
+    // MinHash (minhash.js): estimated share of 5-character pieces in common,
+    // or how much of the shorter post is inside the longer one.
+    minhashDuplicate: num('DEDUP_MINHASH_THRESHOLD', 0.7),
+    minhashContainment: num('DEDUP_MINHASH_CONTAINMENT', 0.85),
+    // Containment is only trusted when the shorter post has this many pieces.
+    minhashMinShingles: num('DEDUP_MINHASH_MIN_SHINGLES', 60),
     semanticWindowHours: num('DEDUP_SEMANTIC_WINDOW_HOURS', 12),
     // Above this, cosine alone is enough (given the time window).
     semanticDuplicate: num('DEDUP_SEMANTIC_THRESHOLD', 0.9),
@@ -66,12 +72,20 @@ function matched(method, score, story, item) {
 // item:   { telegramDate, numbers }
 // exact:  { story } | null                         — same content hash in window
 // fuzzy:  { story, similarity } | null             — best trigram candidate
+// minhash: { story, jaccard, containment, shorter } | null — best MinHash candidate
 // semantic: { story, similarity } | null           — best embedding candidate
-export function decide({ item, exact, fuzzy, semantic }, t = dedupThresholds()) {
+export function decide({ item, exact, minhash, fuzzy, semantic }, t = dedupThresholds()) {
   if (exact?.story && hoursBetween(item.telegramDate, exact.story.last_seen_at) <= t.exactWindowHours) {
     // Identical normalized text cannot carry new numbers, so this is always
     // a plain duplicate.
     return { decision: 'duplicate', method: 'exact', score: 1, storyId: exact.story.id, newNumbers: [] };
+  }
+
+  if (minhash?.story && hoursBetween(item.telegramDate, minhash.story.last_seen_at) <= t.fuzzyWindowHours) {
+    if (minhash.jaccard >= t.minhashDuplicate) return matched('minhash', minhash.jaccard, minhash.story, item);
+    if (minhash.shorter >= t.minhashMinShingles && minhash.containment >= t.minhashContainment) {
+      return matched('minhash-contained', minhash.containment, minhash.story, item);
+    }
   }
 
   if (

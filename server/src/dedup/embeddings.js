@@ -4,9 +4,11 @@
 //
 // Default provider is a local Ollama server (zero API cost, no new npm
 // dependency — plain HTTP). A multilingual model is required for Arabic /
-// Urdu / Persian / English posts to land near each other; `bge-m3` is the
-// recommended default (`ollama pull bge-m3`). `paraphrase-multilingual` is a
-// smaller, faster alternative.
+// Urdu / Persian / English posts to land near each other. With MinHash and
+// trigram matching doing the bulk of the work, a small model is enough:
+// `ollama pull paraphrase-multilingual` + EMBEDDING_MODEL=paraphrase-multilingual
+// (about 0.3 GB, fast on a laptop CPU). `bge-m3` (the default name, 1.2 GB)
+// is more accurate but much heavier.
 //
 // EMBEDDING_PROVIDER=none (the default) disables semantic matching entirely;
 // dedup then relies on exact + fuzzy matching only.
