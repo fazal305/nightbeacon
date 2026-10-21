@@ -22,7 +22,13 @@ function Start-Window($title, $dir, $command) {
   Start-Process powershell -ArgumentList '-NoExit', '-NoProfile', '-Command', $script -WindowStyle Minimized
 }
 
-if (Test-Path $libreExe) {
+function Test-Port($port) {
+  [bool](Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+}
+
+if (Test-Port 5000) {
+  Write-Host 'LibreTranslate is already running.'
+} elseif (Test-Path $libreExe) {
   Write-Host 'Starting LibreTranslate...'
   Start-Window 'Nightbeacon - LibreTranslate' $libre "& '$libreExe' --host 127.0.0.1 --port 5000 --load-only $libreLangs"
 } else {
@@ -32,8 +38,12 @@ if (Test-Path $libreExe) {
 Write-Host 'Starting server (it also starts PostgreSQL)...'
 Start-Window 'Nightbeacon - server' (Join-Path $root 'server') 'npm run dev'
 
-Write-Host 'Starting web app...'
-Start-Window 'Nightbeacon - web' (Join-Path $root 'web') 'npm run dev'
+if (Test-Port 5173) {
+  Write-Host 'Web app is already running.'
+} else {
+  Write-Host 'Starting web app...'
+  Start-Window 'Nightbeacon - web' (Join-Path $root 'web') 'npm run dev'
+}
 
 if (-not $NoBrowser) {
   Start-Sleep -Seconds 8
