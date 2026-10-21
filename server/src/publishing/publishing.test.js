@@ -189,6 +189,21 @@ test('sender: no bot token -> approved posts wait', async () => {
   assert.equal((await pubFor(item)).status, 'approved');
 });
 
+test('config: a channel\'s posting prompt can live in its own file, re-read when edited', async () => {
+  const { publishConfig } = await import('./config.js');
+  const guide = path.join(os.tmpdir(), `nb-guide-${process.pid}.md`);
+  fs.writeFileSync(guide, 'Prompt v1');
+  setChannels([{ ...MAIN, styleGuideFile: path.basename(guide) }]);
+  assert.equal(publishConfig().channels[0].styleGuide, 'Prompt v1');
+  fs.writeFileSync(guide, 'Prompt v2');
+  const t = new Date(Date.now() + 5000);
+  fs.utimesSync(guide, t, t);
+  assert.equal(publishConfig().channels[0].styleGuide, 'Prompt v2');
+  setChannels([{ ...MAIN, styleGuideFile: 'missing.md' }]);
+  assert.throws(() => publishConfig(), /styleGuideFile not found/);
+  fs.rmSync(guide);
+});
+
 test('config: invalid channels are rejected with a clear message', async () => {
   const { normalizeChannels } = await import('./config.js');
   const d = { draftPriorities: 'high', autoPriorities: 'high', sourceCredit: 'none', parseMode: 'none' };

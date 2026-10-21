@@ -15,6 +15,8 @@ import path from 'node:path';
 //   draftPriorities  priorities drafted automatically (PUBLISH_MODE review/auto)
 //   autoPriorities   bot channels only, PUBLISH_MODE=auto: posted without review
 //   styleGuide       your posting prompt for this channel
+//   styleGuideFile   …or a text file with it (path relative to the channels
+//                    file), easier for long prompts; re-read when it changes
 //   styleExamples    how many recent channel posts to show the model (default 6)
 //   sourceCredit     "none" | "channel"
 //   parseMode        "none" | "html" | "markdown" (bot channels)
@@ -30,6 +32,23 @@ function list(value, fallback) {
 }
 
 let fileCache = { path: null, mtimeMs: 0, channels: null };
+
+const guideCache = new Map(); // path -> { mtimeMs, text }
+
+function readGuideFile(channelsFile, relPath, key) {
+  const guidePath = path.resolve(path.dirname(channelsFile), relPath);
+  let stat;
+  try {
+    stat = fs.statSync(guidePath);
+  } catch {
+    throw new Error(`publish channel "${key}": styleGuideFile not found: ${guidePath}`);
+  }
+  const cached = guideCache.get(guidePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs) return cached.text;
+  const text = fs.readFileSync(guidePath, 'utf8').trim();
+  guideCache.set(guidePath, { mtimeMs: stat.mtimeMs, text });
+  return text;
+}
 
 function readChannelsFile(file) {
   const stat = fs.statSync(file);
@@ -82,7 +101,11 @@ export function publishConfig(env = process.env) {
   const file = path.resolve(env.PUBLISH_CHANNELS_FILE || 'publish-channels.json');
   let rawChannels;
   if (fs.existsSync(file)) {
-    rawChannels = readChannelsFile(file);
+    rawChannels = readChannelsFile(file).map((c) =>
+      c.styleGuideFile
+        ? { ...c, styleGuide: [c.styleGuide, readGuideFile(file, c.styleGuideFile, c.key)].filter(Boolean).join('\n\n') }
+        : c
+    );
   } else if (env.PUBLISH_CHANNEL) {
     rawChannels = [
       {

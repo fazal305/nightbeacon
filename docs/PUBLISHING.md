@@ -41,7 +41,9 @@ failover. No new dependency. Pacing uses the existing `RateGate`
        "draftPriorities": ["high"], "styleGuide": "your posting prompt" }
    ]
    ```
-   The file is re-read when it changes; no restart needed. With only one
+   For long posting prompts use `"styleGuideFile": "publish-guides/main.md"`
+   instead of `styleGuide` (path relative to the channels file).
+   Both files are re-read when they change; no restart needed. With only one
    channel you can skip the file and set `PUBLISH_CHANNEL=@my_main` instead.
 
 ## How drafts are written

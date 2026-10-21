@@ -16,3 +16,4 @@ proxies.txt
 
 # Your publishing channels and posting prompts (copy publish-channels.example.json)
 server/publish-channels.json
+server/publish-guides/
