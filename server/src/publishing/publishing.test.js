@@ -109,6 +109,26 @@ test('the Israeli flag is removed from drafts without leaving stray separators',
   assert.equal(removeBannedFlags('🇱🇧⚡🇺🇸 Untouched'), '🇱🇧⚡🇺🇸 Untouched');
 });
 
+test('official channels: statements only from the organisation\'s own channel; the model is told the source type', () => {
+  const officialSources = new Map([['hezb_official', 'Hezbollah']]);
+  const target = [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }];
+  const [{ content: sys }, { content: fromOfficial }] = buildDraftMessages({
+    item: { raw_text: 'x', telegram_date: new Date(), channel_username: 'Hezb_Official' },
+    targets: target,
+    officialSources,
+  });
+  assert.match(sys, /Official statements: for these organisations — Hezbollah — [\s\S]*use exactly SKIP/);
+  assert.match(fromOfficial, /Source: the official channel of Hezbollah/);
+  const [, { content: fromOther }] = buildDraftMessages({
+    item: { raw_text: 'x', telegram_date: new Date(), channel_username: 'random_news' },
+    targets: target,
+    officialSources,
+  });
+  assert.match(fromOther, /Source: not an official channel/);
+  const [{ content: none }] = buildDraftMessages({ item: { raw_text: 'x', telegram_date: new Date() }, targets: target });
+  assert.doesNotMatch(none, /Official statements/);
+});
+
 test('parseDraft / parseMultiDraft: wrappers, SKIP, 4096 limit, missing keys', () => {
   assert.deepEqual(parseDraft('SKIP'), { skip: true, text: null });
   assert.equal(parseDraft('```\n🔴 Post\n```').text, '🔴 Post');
@@ -174,6 +194,22 @@ test('selection: best score wins (priority × corroboration × freshness), one s
   const another = await readyItem({ minutesAgo: 5 });
   await runDraftingTick({ llm, styleFn: style });
   assert.equal(await pubFor(another), undefined, '3 per hour reached');
+});
+
+test('selection: a report from an official channel scores double', async () => {
+  const officialFile = path.join(path.dirname(channelsFile), 'official-sources.md');
+  const username = (await pool.query('SELECT channel_username FROM sources WHERE id = $1', [sourceId])).rows[0].channel_username;
+  fs.writeFileSync(officialFile, `@${username} => Hezbollah\n`);
+  try {
+    setChannels([{ ...MAIN, maxPerHour: 60 }]);
+    const item = await readyItem({ minutesAgo: 5 });
+    await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+    const pub = await pubFor(item);
+    assert.ok(pub.score > 18, `score ${pub.score} includes the official bonus`);
+    assert.match(pub.score_detail, /official channel/);
+  } finally {
+    fs.rmSync(officialFile, { force: true });
+  }
 });
 
 test('selection: a story settles before it is picked unless widely reported; a story is not reposted, an update only after 30 min; stale requests expire', async () => {

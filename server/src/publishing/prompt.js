@@ -64,7 +64,7 @@ export function removeBannedFlags(text) {
 }
 
 // targets: [{ channel, style }]
-export function buildDraftMessages({ item, targets, terminology = [] }) {
+export function buildDraftMessages({ item, targets, terminology = [], officialSources = new Map() }) {
   const multi = targets.length > 1;
   const rules = [
     'You write posts for the operator\'s Telegram news channels.',
@@ -89,6 +89,15 @@ export function buildDraftMessages({ item, targets, terminology = [] }) {
       : 'Reply with the post text only — no preamble, no quotes, no explanation.'
   );
 
+  const organisations = [...new Set(officialSources.values())];
+  if (organisations.length) {
+    rules.push(
+      `Official statements: for these organisations — ${organisations.join(', ')} — write a post presenting their statement ` +
+        '(e.g. "Hezbollah said…", a statement or communiqué) ONLY if the report comes from that organisation\'s own official channel (see "Source" below). ' +
+        `If the report is not from their official channel and is mainly a statement or announcement by one of them, use exactly ${SKIP_TOKEN}. ` +
+        'Other news reports are unaffected.'
+    );
+  }
   if (terminology.length) {
     rules.push(
       'Always use these names (house terminology), including inside quotes you paraphrase:\n' +
@@ -104,6 +113,11 @@ export function buildDraftMessages({ item, targets, terminology = [] }) {
     `Time: ${new Date(item.telegram_date).toISOString()}`,
     item.category ? `Category: ${item.category}` : null,
     item.priority ? `Priority: ${item.priority}` : null,
+    organisations.length
+      ? officialSources.has(String(item.channel_username || '').toLowerCase())
+        ? `Source: the official channel of ${officialSources.get(String(item.channel_username).toLowerCase())}`
+        : 'Source: not an official channel of any organisation listed above'
+      : null,
   ]
     .filter(Boolean)
     .join('\n');

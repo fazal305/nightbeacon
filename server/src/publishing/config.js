@@ -152,8 +152,20 @@ export function publishConfig(env = process.env) {
       : null;
   const terminology = termFile && fs.existsSync(termFile) ? parseTerminology(readGuideFile(termFile, termFile, 'terminology')) : [];
 
+  // Official channels: "@username => Organisation" lines.
+  const officialFile = env.PUBLISH_OFFICIAL_SOURCES_FILE
+    ? path.resolve(env.PUBLISH_OFFICIAL_SOURCES_FILE)
+    : fs.existsSync(file)
+      ? path.join(path.dirname(file), 'official-sources.md')
+      : null;
+  const officialSources = new Map(
+    (officialFile && fs.existsSync(officialFile) ? parseTerminology(readGuideFile(officialFile, officialFile, 'official sources')) : [])
+      .map((r) => [r.term.replace(/^@/, '').toLowerCase(), r.replacement])
+  );
+
   return {
     terminology,
+    officialSources,
     // off: only drafts you request from the dashboard; review: also drafts
     // stories automatically, you approve each; auto: bot-channel drafts at
     // autoPriorities are posted without review.

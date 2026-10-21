@@ -67,6 +67,16 @@ the swaps are also applied to each draft's text (whole words, any
 capitalisation, longest term first), so they hold even when the model copies
 the source's wording. Edits apply to the next draft; no restart needed.
 
+## Official statements
+
+`server/channels/official-sources.md` lists the official channels of
+organisations (`@username => Hezbollah`, one per line; find usernames with
+`npm run sources:list -- <name>`). A statement by a listed organisation is
+posted only when it comes from that organisation's own channel; the same
+statement relayed by any other channel is skipped (`SKIP`). Ordinary news
+from other channels is unaffected. Reports from official channels score
+double in story selection, since a statement appears once, on one channel.
+
 ## How drafts are written
 
 - **Style**: each channel's `styleGuide` (your posting prompt) plus its most

@@ -13,6 +13,7 @@
     "seed:source": "node src/db/seedSource.js",
     "seed:sources-bulk": "node src/db/seedSourcesBulk.js",
     "sources:backfill-ids": "node src/db/backfillChannelIds.js",
+    "sources:list": "node src/db/listSources.js",
     "seed:operator": "node src/db/seedOperator.js",
     "telegram:login": "node src/ingestion/generateSession.js",
     "telegram:check-proxy": "node src/ingestion/checkProxy.js",

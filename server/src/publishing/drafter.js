@@ -47,6 +47,9 @@ async function expireStaleRequests(config) {
 //   score = priority (high 10, medium 4)
 //         × corroboration (1 + log2 of how many channels reported the story)
 //         × 1.3 if it's an update with new figures
+//         × 2 if it comes from an official channel (official-sources.md) —
+//           a statement is published once, by one channel, so it would
+//           otherwise never win on corroboration
 //         × freshness (halves every hour)
 //
 // A story waits settleMinutes before it can be picked (unless 3+ channels
@@ -59,6 +62,7 @@ export const SCORE_SQL = `
   (CASE ri.priority WHEN 'high' THEN 10 WHEN 'medium' THEN 4 ELSE 1 END)
   * (1 + ln(greatest(coalesce(st.item_count, 1), 1)) / ln(2))
   * (CASE WHEN ri.dedup_status = 'update' THEN 1.3 ELSE 1 END)
+  * (CASE WHEN lower(src.channel_username) = ANY($5::text[]) THEN 2 ELSE 1 END)
   * power(0.5, greatest(extract(epoch FROM now() - ri.telegram_date), 0) / 3600.0)`;
 
 async function queueAutomaticDrafts(config) {
@@ -80,8 +84,10 @@ async function queueAutomaticDrafts(config) {
       `WITH candidate AS (
          SELECT ri.id, ri.story_id, ri.priority, ${SCORE_SQL} AS score,
                 coalesce(st.item_count, 1) AS reports, ri.dedup_status,
+                lower(src.channel_username) = ANY($5::text[]) AS official,
                 extract(epoch FROM now() - ri.telegram_date)::int / 60 AS age_min
          FROM raw_items ri
+         JOIN sources src ON src.id = ri.source_id
          LEFT JOIN stories st ON st.id = ri.story_id
          WHERE ri.status = 'ready'
            AND ri.dedup_status IN ('unique', 'update')
@@ -99,10 +105,11 @@ async function queueAutomaticDrafts(config) {
        INSERT INTO publications (raw_item_id, story_id, channel_key, priority, origin, status, score, score_detail)
        SELECT id, story_id, $3, priority, 'auto', 'requested', score,
               priority || ' · ' || reports || CASE WHEN reports = 1 THEN ' channel' ELSE ' channels' END
-                || CASE WHEN dedup_status = 'update' THEN ' · update' ELSE '' END || ' · ' || age_min || ' min old'
+                || CASE WHEN dedup_status = 'update' THEN ' · update' ELSE '' END
+                || CASE WHEN official THEN ' · official channel' ELSE '' END || ' · ' || age_min || ' min old'
        FROM candidate
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [channel.draftPriorities, config.maxAgeMinutes, channel.key, channel.settleMinutes]
+      [channel.draftPriorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()]]
     );
     queued += rowCount;
   }
@@ -216,7 +223,7 @@ export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext
 
     try {
       await gate.wait();
-      const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology }), {
+      const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources }), {
         providerName: config.draftProvider,
         model: config.draftModel || undefined,
         temperature: 0.4,
