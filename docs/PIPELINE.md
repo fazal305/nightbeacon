@@ -217,3 +217,25 @@ endpoint (`client=gtx`, no key, unofficial), [Lingva](https://github.com/thedavi
 public instances (`LINGVA_URLS`), and self-hosted
 [LibreTranslate](https://github.com/LibreTranslate/LibreTranslate)
 (`LIBRETRANSLATE_URL`, fully offline, no limits).
+
+## Growing the source list
+
+`npm run sources:discover` finds candidate channels and writes them, best
+first, to `server/channels/source-candidates.md` for review (nothing is
+added or joined):
+
+1. Telegram's "similar channels" for the 200 most active sources
+   (`channels.getChannelRecommendations`; ids + access hashes included).
+2. Chat-folder links (`t.me/addlist/…`) posted in sources' messages.
+3. Channels that 3+ different sources mention (`@name`, `t.me/name`); these
+   are resolved by username later, slowly, by the poller.
+
+Delete the lines you don't want, then `npm run sources:add` (optionally
+`-- --limit 300`). The running server picks new sources up by itself. A
+new source's first poll keeps only the last `FIRST_POLL_MAX_AGE_MINUTES`
+(60) of posts, so adding hundreds at once doesn't flood the pipeline.
+
+Capacity: one account polls at most ~80 channels a minute
+(`POLL_INTER_SOURCE_DELAY_MS`, 750 ms). Busy channels are polled every
+minute, quiet ones back off to every 10 minutes, so ~1000 sources fit, with
+quiet channels a few minutes slower. Polling faster risks flood-waits.

@@ -14,6 +14,15 @@ import {
 } from './telegramClient.js';
 
 export const POLL_BATCH_LIMIT = Number(process.env.POLL_BATCH_LIMIT || 100);
+// A newly added source's first poll keeps only posts this recent: adding
+// hundreds of channels at once must not flood the pipeline with their last
+// 100 posts each (old news nobody will post).
+const FIRST_POLL_MAX_AGE_S = Number(process.env.FIRST_POLL_MAX_AGE_MINUTES || 60) * 60;
+
+export function messagesToStore(fetched, lastSeenId, nowMs = Date.now()) {
+  if (lastSeenId > 0) return fetched;
+  return fetched.filter((m) => (m.date || 0) >= nowMs / 1000 - FIRST_POLL_MAX_AGE_S);
+}
 
 // Adaptive per-source cadence. A channel that just posted is polled again
 // soon; a quiet one backs off gradually. The overall request rate is still
@@ -150,7 +159,7 @@ async function doPoll(source, tgClient) {
   let insertedCount = 0;
   try {
     await txClient.query('BEGIN');
-    insertedCount = await insertMessages(txClient, source.id, fetched, { observedAt, ingestPath: 'poll' });
+    insertedCount = await insertMessages(txClient, source.id, messagesToStore(fetched, lastSeen), { observedAt, ingestPath: 'poll' });
 
     if (gap) {
       await txClient.query(`INSERT INTO ingestion_gaps (source_id, min_id, max_id) VALUES ($1, $2, $3)`, [
