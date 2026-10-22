@@ -5,6 +5,7 @@ import { publishConfig, channelByKey } from './config.js';
 import { sendToChannel, resetBotClient } from './botClient.js';
 import { loadItemMedia, loadBestMedia } from './media.js';
 import { applyBanners } from './banners.js';
+import { applyWatermark } from './watermark.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
 // faster than PUBLISH_MIN_INTERVAL_SECONDS apart (Telegram's anti-spam
@@ -90,7 +91,8 @@ async function mediaFor(pub, channel, loadMedia, config) {
       channel, media: found.media, text: pub.final_text, official, digest: pub.kind === 'digest', storyId: pub.story_id,
     });
     if (b.note) console.log(`[publishing] ${b.note}`);
-    return { media: b.media, note: b.note || found.note };
+    const media = await applyWatermark(channel, b.media);
+    return { media, note: b.note || found.note };
   } catch (err) {
     console.warn(`[publishing] banner check failed: ${err.message}`);
     return found;

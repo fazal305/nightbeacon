@@ -79,6 +79,10 @@ Target channels are configured in `server/channels/channels.json`:
   with different stories) is swapped for the matching banner; headline posts
   without media and the daily summaries get one too (`"banners"` in
   channels.json).
+- **Watermark** — reposted photos and videos get the channel's logo
+  (`banners/<channel>/watermark.png`), small and 70% opaque, in the corner
+  with the least going on, so nothing important — or another channel's logo
+  — is covered (`"watermark": true`; needs ffmpeg).
 - **Dashboard** — score, media, edit/save, approve, reject and **Post now**
   (bypasses the hourly cap).
 

@@ -38,6 +38,9 @@ import path from 'node:path';
 //                    "breaking news / live" card is swapped for the matching
 //                    banner; textPosts adds one to headline-style posts that
 //                    have no media; digest adds the summary banner
+//                    "watermark": true also puts the channel's logo
+//                    (watermark.png in that folder) on reposted photos and
+//                    videos, in their emptiest corner (watermark.js)
 //   enabled          false to pause a channel
 // Without a channels file, PUBLISH_CHANNEL (+ TELEGRAM_BOT_TOKEN) defines a
 // single bot channel, so the simple setup needs no file at all.
@@ -132,7 +135,13 @@ export function normalizeChannels(rawChannels, defaults) {
       media: c.media !== false,
       digest: normalizeDigest(c.digest, key),
       banners: c.banners?.dir
-        ? { dir: c.banners.dir, replace: c.banners.replace !== false, textPosts: Boolean(c.banners.textPosts), digest: c.banners.digest !== false }
+        ? {
+            dir: c.banners.dir,
+            replace: c.banners.replace !== false,
+            textPosts: Boolean(c.banners.textPosts),
+            digest: c.banners.digest !== false,
+            watermark: Boolean(c.banners.watermark),
+          }
         : null,
     };
   });
