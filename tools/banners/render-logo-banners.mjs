@@ -59,8 +59,8 @@ const rmn = (logo) => ([, chip, label]) => `<!doctype html><html><head><style>
   .c{position:relative;width:1600px;height:900px;overflow:hidden;font-family:'Inter Display','Inter',sans-serif;color:#fff;
      background:radial-gradient(ellipse 60% 80% at 22% 45%,#2b2410 0%,#15130c 45%,#0b0b0d 80%)}
   .ring{position:absolute;left:40px;top:50%;width:640px;height:640px;margin-top:-330px;border-radius:50%;border:2px solid rgba(245,184,0,.25);box-shadow:0 0 120px rgba(245,184,0,.15) inset}
-  .stripe{position:absolute;left:0;right:0;top:638px;height:3px;background:linear-gradient(90deg,transparent,#f5b800 15%,#f5b800 85%,transparent);opacity:.8}
-  .logo{position:absolute;left:95px;top:135px;width:530px}
+  .stripe{position:absolute;left:690px;right:0;top:638px;height:3px;background:linear-gradient(90deg,#f5b800,#f5b800 70%,transparent);opacity:.8}
+  .logo{position:absolute;left:35px;top:125px;width:650px}
   .name{position:absolute;left:690px;top:215px;font-weight:900;line-height:.95;letter-spacing:-1px}
   .name .l1{font-size:110px} .name .l2{font-size:110px;color:#f5b800}
   .bar{position:absolute;left:690px;top:515px;height:96px;display:flex}
