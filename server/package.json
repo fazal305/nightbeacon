@@ -27,6 +27,7 @@
     "translate:drain": "node src/processing/drainBacklog.js",
     "translate:skip-old": "node src/processing/skipOld.js",
     "publish:drain": "node src/publishing/drainDrafts.js",
+    "publish:test-banner": "node src/publishing/testBanner.js",
     "test": "node --import ./src/testSetup.mjs --test --test-concurrency=1 src/ingestion/*.test.js src/processing/*.test.js src/subsystems/*.test.js src/db/*.test.js src/dedup/*.test.js src/pipeline/*.test.js src/publishing/*.test.js"
   },
   "dependencies": {
