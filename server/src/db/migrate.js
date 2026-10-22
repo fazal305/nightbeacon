@@ -7,7 +7,9 @@ import { describeError, connectionHint } from './describeError.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, '../../../db/migrations');
 
-async function run() {
+// Applies any migrations not yet applied. Also run by the server at startup,
+// so pulling new code and restarting is enough.
+export async function applyMigrations({ log = console.log } = {}) {
   const client = await pool.connect();
   try {
     await client.query(`
@@ -29,7 +31,7 @@ async function run() {
     for (const file of files) {
       if (applied.has(file)) continue;
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-      console.log(`Applying migration: ${file}`);
+      log(`Applying migration: ${file}`);
       await client.query('BEGIN');
       try {
         await client.query(sql);
@@ -41,16 +43,19 @@ async function run() {
       }
     }
 
-    console.log('Migrations up to date.');
+    log('Migrations up to date.');
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
-run().catch((err) => {
-  console.error(`Migration failed: ${describeError(err)}`);
-  const hint = connectionHint(err);
-  if (hint) console.error(hint);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  applyMigrations()
+    .then(() => pool.end())
+    .catch((err) => {
+      console.error(`Migration failed: ${describeError(err)}`);
+      const hint = connectionHint(err);
+      if (hint) console.error(hint);
+      process.exit(1);
+    });
+}

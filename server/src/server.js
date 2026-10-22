@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { startPipeline } from './pipeline/workers.js';
 import { recoverOrphanedStatuses } from './db/recoverOrphanedStatuses.js';
+import { applyMigrations } from './db/migrate.js';
 import { describeError, connectionHint } from './db/describeError.js';
 import { sleep } from './pipeline/rateGate.js';
 import { isLocalDatabase, startLocalDb } from './db/localDb.js';
@@ -29,6 +30,8 @@ async function tryStartLocalDb() {
 async function startWhenDatabaseReady() {
   for (let attempt = 1; ; attempt++) {
     try {
+      // New code may need database changes: apply them before anything runs.
+      await applyMigrations({ log: (m) => m.startsWith('Applying') && console.log(`[startup] ${m}`) });
       await recoverOrphanedStatuses();
       if (attempt > 1) console.log('[startup] database reachable — starting pipeline');
       startPipeline();
