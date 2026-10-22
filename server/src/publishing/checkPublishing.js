@@ -86,7 +86,9 @@ async function main() {
   console.log('\n4. Posting pace (bot channels, last hour)');
   for (const channel of config.channels.filter((c) => c.delivery === 'bot')) {
     const { rows: posted } = await pool.query(
-      `SELECT published_at FROM publications WHERE channel_key = $1 AND status = 'published'
+      `SELECT published_at,
+              CASE WHEN kind = 'digest' THEN 'summary' WHEN post_now THEN 'Post now' WHEN origin = 'manual' THEN 'approved by you' ELSE 'automatic' END AS why
+       FROM publications WHERE channel_key = $1 AND status = 'published'
          AND published_at > now() - interval '1 hour' ORDER BY published_at`,
       [channel.key]
     );
@@ -98,6 +100,8 @@ async function main() {
     );
     const times = posted.map((r) => new Date(r.published_at).toLocaleTimeString()).join(', ');
     info(`${channel.telegram}: ${posted.length}/${channel.maxPerHour} posts in the last hour${times ? ` (${times})` : ''}`);
+    const why = Object.entries(posted.reduce((m, r) => ((m[r.why] = (m[r.why] || 0) + 1), m), {}));
+    if (why.length) info(`  of which: ${why.map(([k, n]) => `${n} ${k}`).join(', ')} (only Post now and summaries go past the limit)`);
     for (const q of queue) info(`  waiting: ${q.status.padEnd(9)} ${q.priority.padEnd(7)} ${q.n}`);
     if (posted.length >= channel.maxPerHour) {
       // Room opens when fewer than maxPerHour posts remain inside the hour:

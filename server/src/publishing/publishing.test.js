@@ -384,7 +384,7 @@ test('sender: only bot channels are sent; flood-wait pauses and requeues; stale 
   assert.equal((await pubFor(fresh, 'alerts')).status, 'approved', 'manual channel is never sent by the bot');
 });
 
-test('sender: automatic posts keep to maxPerHour and minGapMinutes, best score first; operator-approved posts go anyway', async () => {
+test('sender: every post keeps to maxPerHour and minGapMinutes (approved ones first, then best score); only Post now goes past', async () => {
   setChannels([{ ...MAIN, maxPerHour: 2, minGapMinutes: 10 }, ALERTS]);
   const ids = [];
   for (let i = 0; i < 4; i++) ids.push(await readyItem());
@@ -411,7 +411,10 @@ test('sender: automatic posts keep to maxPerHour and minGapMinutes, best score f
     [ids[3]]
   );
   await runPublishingTick({ send });
-  assert.equal(sent.at(-1), 'operator approved');
+  assert.equal(sent.length, 2, 'a post you approve waits for a free slot too');
+  await pool.query(`UPDATE publications SET post_now = true WHERE raw_item_id = $1`, [ids[3]]);
+  await runPublishingTick({ send });
+  assert.equal(sent.at(-1), 'operator approved', 'Post now goes past the limit');
 });
 
 test('drafter: automatic drafts queued before scored selection (no score) are expired, not posted', async () => {
@@ -453,7 +456,7 @@ test('drafter: automatic manual-channel drafts nobody copied expire after 6 hour
 test('sender: the post\'s media is passed to the bot; a media problem means a text-only post, not a lost one', async () => {
   const item = await readyItem();
   await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item]);
-  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'with media', now())`, [item]);
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, post_now, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', true, 'with media', now())`, [item]);
   let got;
   await runPublishingTick({
     send: async (t, ch, cfg, media) => ((got = media), { messageId: 1 }),
@@ -465,7 +468,7 @@ test('sender: the post\'s media is passed to the bot; a media problem means a te
 
   const item2 = await readyItem();
   await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item2]);
-  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'text only', now())`, [item2]);
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, post_now, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', true, 'text only', now())`, [item2]);
   await runPublishingTick({
     send: async (t, ch, cfg, media) => ((got = media), { messageId: 2 }),
     loadMedia: async () => { throw new Error('download timed out'); },
@@ -478,7 +481,7 @@ test('sender: the post\'s media is passed to the bot; a media problem means a te
 
   const item3 = await readyItem();
   await pool.query('UPDATE raw_items SET has_media = true WHERE id = $1', [item3]);
-  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 'refused', now())`, [item3]);
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, post_now, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', true, 'refused', now())`, [item3]);
   await runPublishingTick({
     send: async () => ({ messageId: 3, mediaCount: 0, mediaError: 'MEDIA_INVALID' }),
     loadMedia: async () => [{ kind: 'video', name: '1.mp4', file: '/tmp/x.mp4' }],

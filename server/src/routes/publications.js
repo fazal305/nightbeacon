@@ -151,8 +151,8 @@ const ACTIONS = {
   save: { from: ['draft', 'approved'], to: null },
   // Bot channels only: queue for the bot.
   approve: { from: ['draft', 'failed', 'expired'], to: 'approved', delivery: 'bot' },
-  // A queued automatic post: send it with the next send, past the hourly limit.
-  post_now: { from: ['approved'], to: 'approved', delivery: 'bot' },
+  // Send it with the next send, past the hourly limit (the only way past it).
+  post_now: { from: ['approved', 'draft', 'failed', 'expired'], to: 'approved', delivery: 'bot' },
   // Manual channels: you copied and posted it yourself.
   mark_sent: { from: ['draft', 'approved', 'failed', 'expired'], to: 'sent_manually', delivery: 'manual' },
   reject: { from: ['requested', 'draft', 'approved', 'failed', 'expired'], to: 'rejected' },
@@ -189,7 +189,8 @@ publicationsRouter.patch('/:id', h(async (req, res) => {
      SET final_text = COALESCE($3, final_text),
          status = COALESCE($4, status),
          origin = CASE WHEN $2 IN ('approve', 'post_now', 'mark_sent') THEN 'manual' ELSE origin END,
-         approved_at = CASE WHEN $2 = 'approve' THEN now() WHEN $2 = 'post_now' THEN now() - interval '1 day' ELSE approved_at END,
+         approved_at = CASE WHEN $2 IN ('approve', 'post_now') THEN now() ELSE approved_at END,
+         post_now = CASE WHEN $2 = 'post_now' THEN true WHEN $2 = 'approve' THEN false ELSE post_now END,
          published_at = CASE WHEN $2 = 'mark_sent' THEN now() ELSE published_at END,
          attempts = CASE WHEN $2 IN ('approve', 'post_now', 'redraft') THEN 0 ELSE attempts END,
          last_error = CASE WHEN $2 IN ('approve', 'post_now', 'redraft', 'mark_sent') THEN NULL ELSE last_error END,

@@ -15,9 +15,10 @@ import { applyBanners } from './banners.js';
 // Automatic posts also respect each channel's maxPerHour and minGapMinutes,
 // counted over everything published there — so however many drafts pile
 // up (e.g. a backlog drafted at once after an LLM outage), the channel
-// gets at most maxPerHour automatic posts an hour, spread out, best score
-// first; the rest expire at PUBLISH_MAX_AGE_MINUTES. Posts the operator
-// approved go out regardless.
+// gets at most maxPerHour posts an hour, spread out: posts the operator
+// approved first, then automatic ones by best score; automatic ones expire
+// at PUBLISH_MAX_AGE_MINUTES. Only "Post now" and scheduled summaries go
+// past the limit.
 const MAX_ATTEMPTS = 3;
 let gate = null;
 
@@ -124,7 +125,7 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
 
   const { rows: waiting } = await pool.query(
     `SELECT 1 FROM publications WHERE status = 'approved' AND channel_key = ANY($1)
-       AND (origin = 'manual' OR kind = 'digest' OR channel_key = ANY($2)) LIMIT 1`,
+       AND (post_now OR kind = 'digest' OR channel_key = ANY($2)) LIMIT 1`,
     [botKeys, autoKeys]
   );
   if (waiting.length === 0) return [];
@@ -134,8 +135,8 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   const { rows } = await pool.query(
     `UPDATE publications SET status = 'sending', updated_at = now()
      WHERE id = (SELECT id FROM publications WHERE status = 'approved' AND channel_key = ANY($1)
-                   AND (origin = 'manual' OR kind = 'digest' OR channel_key = ANY($2))
-                 ORDER BY (origin = 'manual' OR kind = 'digest') DESC, score DESC NULLS LAST, approved_at, id
+                   AND (post_now OR kind = 'digest' OR channel_key = ANY($2))
+                 ORDER BY (post_now OR kind = 'digest') DESC, (origin = 'manual') DESC, score DESC NULLS LAST, approved_at, id
                  LIMIT 1 FOR UPDATE SKIP LOCKED)
      RETURNING id, raw_item_id, final_text, channel_key, kind, story_id,
                (SELECT s.channel_username FROM raw_items ri JOIN sources s ON s.id = ri.source_id WHERE ri.id = publications.raw_item_id) AS source_username`,
