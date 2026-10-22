@@ -9,6 +9,7 @@ import { buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, remo
 import { parseTerminology } from './config.js';
 import { runDraftingTick } from './drafter.js';
 import { runPublishingTick, publishGate } from './sender.js';
+import { _resetChannelHolds } from './sender.js';
 import { digestSlots, runDigestTick } from './digest.js';
 import { publicationsRouter } from '../routes/publications.js';
 
@@ -564,14 +565,29 @@ test('API + sender: "post now" sends a queued automatic post past the hourly lim
   assert.deepEqual(sent, ['queued']);
 });
 
-test('sender: a real Telegram error (bot not admin) fails the post after 3 attempts', async () => {
+test('sender: a real Telegram error about the post fails it after 3 attempts', async () => {
   const item = await readyItem();
   await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 't', now())`, [item]);
-  const err = Object.assign(new Error('CHAT_ADMIN_REQUIRED'), { code: 400, errorMessage: 'CHAT_ADMIN_REQUIRED' });
+  const err = Object.assign(new Error('MESSAGE_TOO_LONG'), { code: 400, errorMessage: 'MESSAGE_TOO_LONG' });
   for (let i = 0; i < 3; i++) await runPublishingTick({ send: async () => { throw err; } });
   const p = await pubFor(item);
   assert.equal(p.status, 'failed');
   assert.equal(p.attempts, 3);
+});
+
+test('sender: bot not admin yet -> the channel\'s posts wait (no attempts used) and the channel is retried later', async () => {
+  const item = await readyItem();
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, approved_at) VALUES ($1, 'main', 'approved', 'manual', 't', now())`, [item]);
+  const err = Object.assign(new Error('CHAT_ADMIN_REQUIRED'), { code: 400, errorMessage: 'CHAT_ADMIN_REQUIRED' });
+  let calls = 0;
+  await runPublishingTick({ send: async () => { calls++; throw err; } });
+  await runPublishingTick({ send: async () => { calls++; throw err; } });
+  assert.equal(calls, 1, 'channel on hold after the first refusal');
+  const p = await pubFor(item);
+  assert.deepEqual([p.status, p.attempts], ['approved', 0]);
+  _resetChannelHolds();
+  await runPublishingTick({ send: async () => ({ messageId: 5 }) });
+  assert.equal((await pubFor(item)).status, 'published', 'posts once the bot can');
 });
 
 test('sender: no bot token -> approved posts wait', async () => {

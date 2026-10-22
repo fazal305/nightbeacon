@@ -23,6 +23,22 @@ let gate = null;
 
 export const publishingStats = { lastSentAt: null, lastError: null, pausedUntil: null };
 
+// The bot can't post in a channel yet (not admin, no "Post messages" right):
+// that channel's posts wait — no attempts spent — and it is retried every
+// HOLD_MS, so posting starts by itself once the owner makes the bot admin.
+// Waiting automatic posts still expire when the news gets old.
+const HOLD_MS = 15 * 60_000;
+const NO_RIGHTS_RE = /CHAT_ADMIN_REQUIRED|CHAT_WRITE_FORBIDDEN|CHANNEL_PRIVATE|USER_NOT_PARTICIPANT|RIGHT_FORBIDDEN|CHAT_SEND_\w+_FORBIDDEN|USER_BANNED_IN_CHANNEL/;
+const channelHolds = new Map(); // channel key -> until (ms)
+
+export function isNoRightsError(err) {
+  return NO_RIGHTS_RE.test(err?.errorMessage || err?.message || '');
+}
+
+export function _resetChannelHolds() {
+  channelHolds.clear();
+}
+
 export function publishGate(config = publishConfig()) {
   if (!gate) gate = new RateGate(config.minIntervalSeconds * 1000);
   return gate;
@@ -84,7 +100,9 @@ async function mediaFor(pub, channel, loadMedia, config) {
 export async function runPublishingTick({ send = sendToChannel, loadMedia = loadItemMedia } = {}) {
   const config = publishConfig();
   // Not configured yet: approved posts simply wait (the Publishing page says why).
-  const botKeys = config.channels.filter((c) => c.delivery === 'bot').map((c) => c.key);
+  const botKeys = config.channels
+    .filter((c) => c.delivery === 'bot' && !((channelHolds.get(c.key) || 0) > Date.now()))
+    .map((c) => c.key);
   if (!config.botToken || botKeys.length === 0) return [];
   const g = publishGate(config);
   if (g.isPaused()) return [];
@@ -159,8 +177,13 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
     }
     // Flood-waits and "no answer" (proxy/bot connection down) aren't the
     // post's fault: requeue without spending an attempt.
-    const systemic = flood != null || !isTelegramAnswer(err);
-    if (!flood && systemic) resetBotClient();
+    const noRights = isNoRightsError(err);
+    if (noRights) {
+      channelHolds.set(channel.key, Date.now() + HOLD_MS);
+      console.warn(`[publishing] the bot can't post in ${channel.telegram} (${err.errorMessage || err.message}) — make it an admin with "Post messages"; retrying in 15 min`);
+    }
+    const systemic = noRights || flood != null || !isTelegramAnswer(err);
+    if (!flood && !noRights && systemic) resetBotClient();
     await pool.query(
       systemic
         ? `UPDATE publications SET status = 'approved', last_error = $2, updated_at = now() WHERE id = $1`

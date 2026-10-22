@@ -71,7 +71,9 @@ Target channels are configured in `server/channels/channels.json`:
   reason is shown in the dashboard.
 - **Banners** — `server/channels/banners/r3syst/` holds the channel's own
   banners (breaking, urgent, live, developing, statement, update, alert,
-  summary; regenerate or add labels with `node tools/banners/render.mjs`).
+  summary; regenerate or add labels with `node tools/banners/render.mjs`;
+  Resistance Media News has its own set in `banners/rmn/`, from
+  `tools/banners/render-rmn.mjs`).
   A source photo that is only another channel's generic "breaking news" card
   (recognised from examples in `server/channels/banners/known/`, or because
   the same picture keeps coming with different stories) is swapped for the
