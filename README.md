@@ -69,16 +69,16 @@ Target channels are configured in `server/channels/channels.json`:
   copies are compared (frame hashes, length, sound) and the one without a
   channel's logo is used, then the highest resolution, then the earliest. If media fails the post still goes out as text, and the
   reason is shown in the dashboard.
-- **Banners** — `server/channels/banners/r3syst/` holds the channel's own
-  banners (breaking, urgent, live, developing, statement, update, alert,
-  summary; regenerate or add labels with `node tools/banners/render.mjs`;
-  Resistance Media News has its own set in `banners/rmn/`, from
-  `tools/banners/render-rmn.mjs`).
-  A source photo that is only another channel's generic "breaking news" card
-  (recognised from examples in `server/channels/banners/known/`, or because
-  the same picture keeps coming with different stories) is swapped for the
-  matching banner; headline posts without media and the daily summaries get
-  one too (`"banners"` in channels.json).
+- **Banners** — each bot channel has its own banner set built around its
+  logo (`server/channels/banners/r3syst/` and `.../rmn/`: breaking, urgent,
+  live, developing, statement, update, alert, summary). Re-render or change
+  labels with `node tools/banners/render-logo-banners.mjs` (logos:
+  `tools/banners/*-logo.png`). A source photo that is only another channel's
+  generic "breaking news" card (recognised from examples in
+  `server/channels/banners/known/`, or because the same picture keeps coming
+  with different stories) is swapped for the matching banner; headline posts
+  without media and the daily summaries get one too (`"banners"` in
+  channels.json).
 - **Dashboard** — score, media, edit/save, approve, reject and **Post now**
   (bypasses the hourly cap).
 
