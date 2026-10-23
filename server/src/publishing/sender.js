@@ -73,7 +73,12 @@ async function sourceMedia(pub, channel, loadMedia, config) {
       console.warn(`[publishing] media for item ${pub.raw_item_id} not used: ${best.error} — posting text only`);
       return { media: [], note: `Posted as text only: couldn't get the media (${best.error})` };
     }
-    return { media: best.media, note: null };
+    // Which channel the copy being posted came from (for the watermark).
+    const { rows } = await pool.query(
+      `SELECT s.channel_username FROM raw_items ri JOIN sources s ON s.id = ri.source_id WHERE ri.id = $1`,
+      [best.rawItemId]
+    );
+    return { media: best.media, note: null, from: rows[0]?.channel_username || null };
   } catch (err) {
     console.warn(`[publishing] could not fetch media for item ${pub.raw_item_id}: ${err.message} — posting text only`);
     return { media: [], note: `Posted as text only: couldn't get the media (${err.message})` };
@@ -91,7 +96,8 @@ async function mediaFor(pub, channel, loadMedia, config) {
       channel, media: found.media, text: pub.final_text, official, digest: pub.kind === 'digest', storyId: pub.story_id,
     });
     if (b.note) console.log(`[publishing] ${b.note}`);
-    const media = await applyWatermark(channel, b.media);
+    const from = found.from ? String(found.from).toLowerCase() : null;
+    const media = await applyWatermark(channel, b.media, { source: from, official: from ? config.officialSources.has(from) : false });
     return { media, note: b.note || found.note };
   } catch (err) {
     console.warn(`[publishing] banner check failed: ${err.message}`);

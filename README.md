@@ -81,8 +81,11 @@ Target channels are configured in `server/channels/channels.json`:
   channels.json).
 - **Watermark** — reposted photos and videos get the channel's logo
   (`banners/<channel>/watermark.png`), small and 70% opaque, in the corner
-  with the least going on, so nothing important — or another channel's logo
-  — is covered (`"watermark": true`; needs ffmpeg).
+  with the least going on, so nothing important is covered
+  (`"watermark": true`; needs ffmpeg). Skipped for media from official
+  channels and for media that already carries a logo: a fixed logo over
+  moving video is detected directly; for photos, channels whose videos are
+  stamped, or whose photos share the same marked corner, are learned.
 - **Dashboard** — score, media, edit/save, approve, reject and **Post now**
   (bypasses the hourly cap).
 

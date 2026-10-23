@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { applyWatermark, quietestCorner, placement, cornerScores } from './watermark.js';
+import { applyWatermark, quietestCorner, placement, cornerScores, hasWatermark, cornerHashes, matchesEarlierCorners } from './watermark.js';
 import { ffmpegAvailable } from './mediaCompare.js';
 
 const hasFfmpeg = ffmpegAvailable();
@@ -47,7 +47,8 @@ test('photo: logo goes in an empty corner, not over another channel\'s logo or t
 
 test('video: watermarked, sound kept, our own banner never watermarked', { skip: !hasFfmpeg && 'ffmpeg not installed' }, async () => {
   const file = path.join(dir, 'clip.mp4');
-  ff(['-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=15:duration=3', '-f', 'lavfi', '-i', 'sine=duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file]);
+  // Fully moving picture (no fixed overlay), so nothing counts as an existing logo.
+  ff(['-f', 'lavfi', '-i', 'mandelbrot=s=640x360:rate=15', '-f', 'lavfi', '-i', 'sine=duration=3', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file]);
   const banner = { kind: 'photo', file: path.resolve('channels/banners/rmn/breaking.jpg'), name: 'breaking.jpg' };
   const [v, b] = await applyWatermark(channel('rmn'), [{ kind: 'video', file, name: 'clip.mp4', duration: 3 }, banner]);
   assert.match(path.basename(v.file), /^wm-rmn-clip\.mp4$/);
@@ -55,4 +56,42 @@ test('video: watermarked, sound kept, our own banner never watermarked', { skip:
   assert.match(streams, /video/);
   assert.match(streams, /audio/);
   assert.equal(b.file, banner.file);
+});
+
+test('official channels\' photos/videos are posted without our logo', async () => {
+  const media = [{ kind: 'photo', file: '/tmp/x.jpg', name: 'x.jpg' }];
+  const out = await applyWatermark(channel('r3syst'), media, { source: 'someofficial', official: true, detect: async () => false });
+  assert.equal(out[0].file, '/tmp/x.jpg');
+});
+
+test('video: a logo that stays put while the footage moves is detected; a clean moving clip is not', { skip: !hasFfmpeg && 'ffmpeg not installed' }, async () => {
+  const clean = path.join(dir, 'moving.mp4');
+  const stamped = path.join(dir, 'stamped.mp4');
+  ff(['-f', 'lavfi', '-i', 'mandelbrot=s=640x360:rate=10', '-t', '4', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clean]);
+  ff(['-i', clean, '-vf', "drawbox=x=500:y=300:w=130:h=50:color=black@0.6:t=fill,drawtext=text='@OtherChannel':x=508:y=312:fontsize=18:fontcolor=white",
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', stamped]);
+  let saved = {};
+  const deps = { loadSources: async () => saved, saveSources: async (v) => { saved = v; } };
+  assert.equal(await hasWatermark({ kind: 'video', file: clean, duration: 4 }, 'cleanchan', deps), false);
+  assert.equal(await hasWatermark({ kind: 'video', file: stamped, duration: 4 }, 'stampchan', deps), true);
+  // That channel stamps its media: its photos are left alone too.
+  assert.equal(await hasWatermark({ kind: 'photo', file: '/nope.jpg' }, 'stampchan', deps), true);
+  const out = await applyWatermark(channel('r3syst'), [{ kind: 'video', file: stamped, name: 'stamped.mp4', duration: 4 }], {
+    source: 'stampchan', detect: (m, s) => hasWatermark(m, s, deps),
+  });
+  assert.equal(out[0].file, stamped, 'not watermarked again');
+});
+
+test('photo: a corner that looks the same on a channel\'s different photos is its watermark', () => {
+  const gw = 160;
+  const gh = 90;
+  const photo = (seed, stamp) => {
+    const f = Buffer.alloc(gw * gh);
+    for (let i = 0; i < f.length; i++) f[i] = (Math.sin(i * 0.37 * seed) * 60 + 128 + ((i % gw) * seed) % 40) | 0;
+    if (stamp) for (let y = 70; y < 90; y++) for (let x = 115; x < 160; x++) f[y * gw + x] = ((x >> 2) + (y >> 2)) % 2 ? 250 : 10;
+    return f;
+  };
+  const earlier = [cornerHashes(photo(1.3, true), gw, gh), cornerHashes(photo(2.1, true), gw, gh)];
+  assert.equal(matchesEarlierCorners(cornerHashes(photo(3.7, true), gw, gh), earlier), true);
+  assert.equal(matchesEarlierCorners(cornerHashes(photo(3.7, false), gw, gh), earlier), false);
 });
