@@ -6,6 +6,8 @@ import { sendToChannel, resetBotClient } from './botClient.js';
 import { loadItemMedia, loadBestMedia } from './media.js';
 import { applyBanners } from './banners.js';
 import { applyWatermark } from './watermark.js';
+import { findSameNews, sameNewsChannels } from './sameNews.js';
+import { limitsFor, refreshPaces } from './pace.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
 // faster than PUBLISH_MIN_INTERVAL_SECONDS apart (Telegram's anti-spam
@@ -116,6 +118,7 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   const g = publishGate(config);
   if (g.isPaused()) return [];
   await expireStale(config);
+  await refreshPaces(config);
 
   // Channels with room for an automatic post right now.
   const { rows: recent } = await pool.query(
@@ -128,7 +131,8 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
     const ch = channelByKey(config, key);
     const r = recent.find((x) => x.channel_key === key);
     if (!r) return true;
-    return r.n < ch.maxPerHour && Date.now() - new Date(r.last_at).getTime() >= ch.minGapMinutes * 60_000;
+    const { maxPerHour, minGapMinutes } = limitsFor(ch, config);
+    return r.n < maxPerHour && Date.now() - new Date(r.last_at).getTime() >= minGapMinutes * 60_000;
   });
 
   const { rows: waiting } = await pool.query(
@@ -146,7 +150,7 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
                    AND (post_now OR kind = 'digest' OR channel_key = ANY($2))
                  ORDER BY (post_now OR kind = 'digest') DESC, (origin = 'manual') DESC, score DESC NULLS LAST, approved_at, id
                  LIMIT 1 FOR UPDATE SKIP LOCKED)
-     RETURNING id, raw_item_id, final_text, channel_key, kind, story_id,
+     RETURNING id, raw_item_id, final_text, channel_key, kind, story_id, post_now, origin,
                (SELECT s.channel_username FROM raw_items ri JOIN sources s ON s.id = ri.source_id WHERE ri.id = publications.raw_item_id) AS source_username`,
     [botKeys, autoKeys]
   );
@@ -160,6 +164,20 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
       [pub.id]
     );
     return [{ id: pub.id, outcome: 'failed', error: 'channel is no longer configured' }];
+  }
+
+  // Last duplicate check: the same news may have gone out on this channel
+  // (or another in its exclusiveGroup) since the post was queued.
+  if (pub.kind === 'post' && !pub.post_now && pub.origin === 'auto') {
+    const same = await findSameNews(pub.final_text, sameNewsChannels(config, channel), { exceptId: pub.id }).catch(() => null);
+    if (same) {
+      await pool.query(`UPDATE publications SET status = 'rejected', last_error = $2, updated_at = now() WHERE id = $1`, [
+        pub.id,
+        `same news as post #${same.id} on ${same.channel_key}`,
+      ]);
+      console.log(`[publishing] not posting #${pub.id}: same news as #${same.id} on ${same.channel_key}`);
+      return [{ id: pub.id, outcome: 'duplicate' }];
+    }
   }
 
   try {

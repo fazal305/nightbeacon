@@ -69,6 +69,15 @@ Target channels are configured in `server/channels/channels.json`:
   copies are compared (frame hashes, length, sound) and the one without a
   channel's logo is used, then the highest resolution, then the earliest. If media fails the post still goes out as text, and the
   reason is shown in the dashboard.
+- **No repeats** — R3SYST and RMN share `"exclusiveGroup": "bots"`: a story
+  one of them used is never picked for the other, and every finished post is
+  compared with what both posted in the last 12 hours (same words, or a good
+  overlap plus the same figures) before it is queued and again before it is
+  sent, so the same news isn't posted twice even when two reports weren't
+  matched as one story.
+- **Pace like Middle East Spectator** — `"paceLike": "Middle_East_Spectator"`:
+  each hour's limit follows that channel's own posts per hour of the day
+  (last 14 days), up to `maxPerHour`. See it with `npm run sources:pattern`.
 - **Banners** — each bot channel has its own banner set built around its
   logo (`server/channels/banners/r3syst/` and `.../rmn/`: breaking, urgent,
   live, developing, statement, update, alert, summary). Re-render or change
@@ -134,6 +143,7 @@ Useful commands (in `server/`):
 | `npm run translate:skip-old` | Takes posts older than 48 h out of the translation queue (`-- --restore` undoes it) |
 | `npm run publish:drain` | Clears the queue of posts waiting to be drafted |
 | `npm run sources:list` | Lists monitored sources |
+| `npm run sources:pattern` | A channel's posting pattern (default Middle East Spectator) |
 | `npm run sources:discover` → `npm run sources:add` | Finds candidate channels (similar channels, folders, mentions), then adds the ones you keep |
 | `npm run sources:official` | Builds `official-sources.md` from a Telegram folder link |
 | `npm run seed:sources-bulk` | Adds every channel in chat-folder links (read-only) |

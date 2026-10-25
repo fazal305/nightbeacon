@@ -41,6 +41,13 @@ import path from 'node:path';
 //                    "watermark": true also puts the channel's logo
 //                    (watermark.png in that folder) on reposted photos and
 //                    videos, in their emptiest corner (watermark.js)
+//   exclusiveGroup   channels sharing a group name never post the same story
+//                    (e.g. "bots"): a story one of them used is not picked
+//                    for the others, and a finished post is checked against
+//                    what they all posted recently (sameNews.js)
+//   paceLike         a monitored channel's @username: its posts per hour of
+//                    the day (last 14 days) become this channel's hourly
+//                    limits, with maxPerHour as the ceiling (pace.js)
 //   enabled          false to pause a channel
 // Without a channels file, PUBLISH_CHANNEL (+ TELEGRAM_BOT_TOKEN) defines a
 // single bot channel, so the simple setup needs no file at all.
@@ -134,6 +141,10 @@ export function normalizeChannels(rawChannels, defaults) {
       parseMode: (c.parseMode || defaults.parseMode).toLowerCase(),
       media: c.media !== false,
       digest: normalizeDigest(c.digest, key),
+      // Channels with the same exclusiveGroup never post the same story.
+      exclusiveGroup: c.exclusiveGroup ? String(c.exclusiveGroup) : null,
+      // Copy another channel's hourly posting pattern (pace.js).
+      paceLike: c.paceLike ? String(c.paceLike).replace(/^@/, '') : null,
       banners: c.banners?.dir
         ? {
             dir: c.banners.dir,

@@ -61,11 +61,13 @@ const PROVIDERS = {
     label: 'NVIDIA',
   },
   // SambaNova Cloud: free tier. Key at https://cloud.sambanova.ai
+  // (Llama 3.3 70B and DeepSeek V3.x leave SambaCloud in Nov 2026; their
+  // suggested replacements come first, retired models are skipped by themselves.)
   sambanova: {
     url: 'https://api.sambanova.ai/v1/chat/completions',
     apiKeyEnv: 'SAMBANOVA_API_KEY',
     modelEnv: 'SAMBANOVA_MODEL',
-    defaultModel: 'Meta-Llama-3.3-70B-Instruct,Meta-Llama-3.1-8B-Instruct',
+    defaultModel: 'gpt-oss-120b,MiniMax-M3.1-Flash,Meta-Llama-3.3-70B-Instruct',
     label: 'SambaNova',
   },
   // Cohere: free trial key (1,000 calls a month) at https://dashboard.cohere.com

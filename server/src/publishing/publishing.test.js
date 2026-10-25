@@ -417,6 +417,24 @@ test('sender: every post keeps to maxPerHour and minGapMinutes (approved ones fi
   assert.equal(sent.at(-1), 'operator approved', 'Post now goes past the limit');
 });
 
+test('exclusiveGroup: a story one bot channel used is not picked for the other; the same news is not posted twice', async () => {
+  const SECOND = { key: 'second', telegram: '@second', delivery: 'bot', draftPriorities: ['high'], autoPriorities: ['high'], minGapMinutes: 0, settleMinutes: 0 };
+  setChannels([{ ...MAIN, exclusiveGroup: 'g', minGapMinutes: 0, settleMinutes: 0 }, { ...SECOND, exclusiveGroup: 'g' }]);
+  const used = await readyItem({ text: 'Strike on the port of Hodeidah, 12 injured according to officials.' });
+  await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, published_at, score)
+                    VALUES ($1, 'main', 'published', 'auto', 'Strike on the port of Hodeidah: 12 injured, officials said. #Yemen', now(), 10)`, [used]);
+  await runDraftingTick({ llm: fakeLLM(() => 'x'), styleFn: style });
+  assert.equal(await pubFor(used, 'second'), undefined, 'second channel does not take the story main already posted');
+
+  // A different report of the same event (not matched as one story) is drafted, then caught as the same news.
+  const other = await readyItem({ text: 'Hodeidah port hit by strike; officials say twelve hurt.' });
+  await runDraftingTick({ llm: fakeLLM(() => 'BREAKING: Strike hits the port of Hodeidah, 12 injured, officials said. #Yemen'), styleFn: style });
+  const { rows } = await pool.query('SELECT channel_key, status, last_error FROM publications WHERE raw_item_id = $1', [other]);
+  assert.equal(rows.length, 1, 'picked by one channel only');
+  assert.equal(rows[0].status, 'rejected');
+  assert.match(rows[0].last_error, /same news as post #\d+ on main/);
+});
+
 test('drafter: automatic drafts queued before scored selection (no score) are expired, not posted', async () => {
   const item = await readyItem();
   await pool.query(`INSERT INTO publications (raw_item_id, channel_key, origin, status, final_text) VALUES ($1, 'main', 'auto', 'approved', 'old')`, [item]);

@@ -17,6 +17,7 @@
     "sources:official": "node src/db/officialFromFolder.js",
     "sources:discover": "node src/db/discoverSources.js",
     "sources:add": "node src/db/addCandidates.js",
+    "sources:pattern": "node src/db/postingPattern.js",
     "seed:operator": "node src/db/seedOperator.js",
     "telegram:login": "node src/ingestion/generateSession.js",
     "telegram:check-proxy": "node src/ingestion/checkProxy.js",

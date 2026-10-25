@@ -4,6 +4,8 @@ import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
 import { runDigestTick } from './digest.js';
+import { findSameNews, sameNewsChannels } from './sameNews.js';
+import { limitsFor, refreshPaces } from './pace.js';
 import {
   buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags,
   keepsStatementVerbatim, statementText, officialOrganisation,
@@ -98,7 +100,8 @@ async function queueAutomaticDrafts(config) {
       config.mode === 'auto' && channel.delivery === 'bot'
         ? channel.draftPriorities.filter((p) => channel.autoPriorities.includes(p))
         : channel.draftPriorities;
-    if (priorities.length === 0 || channel.maxPerHour <= 0) continue;
+    const { maxPerHour, minGapMinutes } = limitsFor(channel, config);
+    if (priorities.length === 0 || maxPerHour <= 0) continue;
     // Drafts the model rejected as not worth posting don't use up a slot.
     const { rows: [recent] } = await pool.query(
       `SELECT count(*)::int AS n, max(created_at) AS last_at FROM publications
@@ -106,8 +109,10 @@ async function queueAutomaticDrafts(config) {
          AND NOT (status = 'rejected' AND last_error IS NOT DISTINCT FROM $2)`,
       [channel.key, SKIPPED_BY_MODEL]
     );
-    if (recent.n >= channel.maxPerHour) continue;
-    if (recent.last_at && Date.now() - new Date(recent.last_at).getTime() < channel.minGapMinutes * 60_000) continue;
+    if (recent.n >= maxPerHour) continue;
+    if (recent.last_at && Date.now() - new Date(recent.last_at).getTime() < minGapMinutes * 60_000) continue;
+    // Stories already used by another channel of its exclusiveGroup.
+    const others = sameNewsChannels(config, channel).filter((k) => k !== channel.key);
 
     const { rowCount } = await pool.query(
       `WITH candidate AS (
@@ -130,6 +135,11 @@ async function queueAutomaticDrafts(config) {
              WHERE p.channel_key = $3 AND ri.story_id IS NOT NULL AND p.story_id = ri.story_id
                AND p.status NOT IN ('rejected', 'failed', 'expired')
                AND p.created_at > now() - CASE WHEN ri.dedup_status = 'update' THEN interval '30 minutes' ELSE interval '6 hours' END)
+           AND NOT EXISTS (
+             SELECT 1 FROM publications p
+             WHERE p.channel_key = ANY($7::text[]) AND p.status NOT IN ('rejected', 'failed', 'expired')
+               AND p.created_at > now() - interval '24 hours'
+               AND (p.raw_item_id = ri.id OR (ri.story_id IS NOT NULL AND p.story_id = ri.story_id)))
          ORDER BY score DESC, ri.telegram_date DESC
          LIMIT 1)
        INSERT INTO publications (raw_item_id, story_id, channel_key, priority, origin, status, score, score_detail)
@@ -140,7 +150,7 @@ async function queueAutomaticDrafts(config) {
                 || CASE WHEN with_media THEN ' · photo/video' ELSE '' END || ' · ' || age_min || ' min old'
        FROM candidate
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()], channel.media]
+      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()], channel.media, others]
     );
     queued += rowCount;
   }
@@ -201,6 +211,18 @@ async function saveDraft(pub, channel, item, draft, model, config) {
   // posted automatically — it waits for review with a note.
   const official = officialOrganisation(item, config.officialSources);
   const text = removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology));
+  // Second duplicate check, on the finished post (automatic ones only).
+  if (pub.origin === 'auto') {
+    const same = await findSameNews(text, sameNewsChannels(config, channel), { exceptId: pub.id });
+    if (same) {
+      await pool.query(
+        `UPDATE publications SET status = 'rejected', draft_text = $2, final_text = $2, model = $3, drafted_at = now(),
+                last_error = $4, updated_at = now() WHERE id = $1`,
+        [pub.id, text, model, `same news as post #${same.id} on ${same.channel_key}`]
+      );
+      return 'duplicate';
+    }
+  }
   const altered = official && !keepsStatementVerbatim(text, statementText(item));
   const autoApprove =
     !altered &&
@@ -235,6 +257,7 @@ export async function failPublications(pubs, message, systemic) {
 export async function runDraftingTick({ llm = callLLM, styleFn = getStyleContext } = {}) {
   const config = publishConfig();
   await expireStaleRequests(config);
+  await refreshPaces(config);
   await queueAutomaticDrafts(config);
   const digests = await runDigestTick({ llm, styleFn });
   const groups = await claimRequested();

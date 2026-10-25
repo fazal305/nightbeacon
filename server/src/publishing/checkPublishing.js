@@ -9,6 +9,7 @@ import { Api } from 'telegram';
 import { pool } from '../db/pool.js';
 import { describeError } from '../db/describeError.js';
 import { withTimeout, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
+import { limitsFor, refreshPaces, paceProfile } from './pace.js';
 import { publishConfig } from './config.js';
 import { getBotClient, getChannelPeer, sendToChannel } from './botClient.js';
 
@@ -84,7 +85,13 @@ async function main() {
   for (const e of errors) bad(`${e.channel_key} (${e.status}): ${e.last_error}`);
 
   console.log('\n4. Posting pace (bot channels, last hour)');
+  await refreshPaces(config);
   for (const channel of config.channels.filter((c) => c.delivery === 'bot')) {
+    const lim = limitsFor(channel, config);
+    if (channel.paceLike) {
+      const p = await paceProfile(channel.paceLike, config.timeZone);
+      if (p.days < 3) bad(`paceLike @${channel.paceLike}: only ${p.days} day(s) of its posts stored — check the username (npm run sources:list); using maxPerHour meanwhile`);
+    }
     const { rows: posted } = await pool.query(
       `SELECT published_at,
               CASE WHEN kind = 'digest' THEN 'summary' WHEN post_now THEN 'Post now' WHEN origin = 'manual' THEN 'approved by you' ELSE 'automatic' END AS why
@@ -99,14 +106,14 @@ async function main() {
       [channel.key]
     );
     const times = posted.map((r) => new Date(r.published_at).toLocaleTimeString()).join(', ');
-    info(`${channel.telegram}: ${posted.length}/${channel.maxPerHour} posts in the last hour${times ? ` (${times})` : ''}`);
+    info(`${channel.telegram}: ${posted.length}/${lim.maxPerHour} posts in the last hour${times ? ` (${times})` : ''}${channel.paceLike ? ` — limit this hour ${lim.maxPerHour}, following @${channel.paceLike}'s pattern` : ''}`);
     const why = Object.entries(posted.reduce((m, r) => ((m[r.why] = (m[r.why] || 0) + 1), m), {}));
     if (why.length) info(`  of which: ${why.map(([k, n]) => `${n} ${k}`).join(', ')} (only Post now and summaries go past the limit)`);
     for (const q of queue) info(`  waiting: ${q.status.padEnd(9)} ${q.priority.padEnd(7)} ${q.n}`);
-    if (posted.length >= channel.maxPerHour) {
+    if (posted.length >= lim.maxPerHour) {
       // Room opens when fewer than maxPerHour posts remain inside the hour:
       // once the post at index (count - maxPerHour) is an hour old.
-      const next = new Date(new Date(posted[posted.length - channel.maxPerHour].published_at).getTime() + 3600_000);
+      const next = new Date(new Date(posted[posted.length - lim.maxPerHour].published_at).getTime() + 3600_000);
       info(`  hourly limit reached: next automatic post after ${next.toLocaleTimeString()}`);
     }
     const { rows: queued } = await pool.query(
@@ -122,7 +129,7 @@ async function main() {
     const reviewing = queue.filter((q) => q.status === 'draft').reduce((n, q) => n + q.n, 0);
     if (reviewing) info(`  ${reviewing} draft(s) wait for your approval on the Publishing page (not posted automatically)`);
     const ready = queue.filter((q) => q.status === 'approved').reduce((n, q) => n + q.n, 0);
-    if (!ready && posted.length < channel.maxPerHour) {
+    if (!ready && posted.length < lim.maxPerHour) {
       info('  nothing approved to post right now: waiting for the next high-priority story to be drafted');
     }
   }
