@@ -6,7 +6,11 @@ scores the stories, and drafts posts in the style of each of your own
 channels — posting automatically to the channel its bot admins and preparing
 ready-to-copy drafts for the rest.
 
-> This repository is currently **private**.
+![Publishing page](docs/screenshots/publishing.png)
+
+- [How it works](#how-it-works) · [Publishing](#publishing) ·
+  [Screenshots](#screenshots) · [Running it](#running-it-windows) ·
+  [Commands](#useful-commands) · [Security](#security)
 
 ## How it works
 
@@ -46,14 +50,21 @@ ready-to-copy drafts for the rest.
 
 Target channels are configured in `server/channels/channels.json`:
 
-| Channel | Delivery |
-|---|---|
-| @r3syst | Bot (@Nightbeaconbot) posts automatically (high priority), plus summaries at 09:00 and 21:00 |
-| @ResistanceMediaNews, @GiviDpr, @RezistanceTrench1 | Drafts in the dashboard (max 2/hour) — Copy, then Mark as sent |
+| Channel | Delivery | Limit | Notes |
+|---|---|---|---|
+| @r3syst | Bot (@Nightbeaconbot) posts high priority automatically | pace of Middle East Spectator, up to 20/hour | summaries at 09:00 and 21:00 · quiet hours 06:00–10:00 |
+| @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | pace of Middle East Spectator, up to 4/hour | quiet hours 02:00–07:00 |
+| @GiviDpr, @RezistanceTrench1 | Drafts in the dashboard — Copy, then Mark as sent | 2/hour | unsent drafts expire after 6 hours |
+
+Each channel's settings (`maxPerHour`, `paceLike`, `exclusiveGroup`,
+`notify`, `quietHours`, `digest`, `banners`) are in `channels.json`; the
+Publishing page shows them per channel, with posts this hour, posted in the
+last 24 h and repeats blocked.
 
 - **Selection** — score = priority × (1 + log₂ reports) × update 1.3 ×
-  official source 2 × has media 1.2 × freshness. At most 6 posts/hour per bot
-  channel with a minimum gap, enforced at send time. Stale unsent posts expire.
+  official source 2 × has media 1.2 × freshness. Each bot channel's hourly
+  limit and minimum gap are enforced at send time (Post now and summaries
+  are exempt). Stale unsent posts expire.
 - **Writing rules** — facts only; neutral attribution ("CENTCOM said", "IRGC
   said"); no mention of which channels reported it; no 🇮🇱 emoji.
   Editable text files in `server/channels/`:
@@ -101,6 +112,11 @@ Target channels are configured in `server/channels/channels.json`:
   stamped, or whose photos share the same marked corner, are learned.
 - **Dashboard** — score, media, edit/save, approve, reject and **Post now**
   (bypasses the hourly cap).
+- **Performance** — `npm run stats:posts` reads views and shares of your own
+  posts and reports what works: hour of day, media vs. text, headline style,
+  length, best and weakest posts.
+
+![Banners](docs/screenshots/banners.jpg)
 
 Drafting uses an LLM rotation across Groq, Gemini, Cerebras, Mistral,
 GitHub Models, NVIDIA, SambaNova, Cohere, OpenRouter, Cloudflare, Hugging
@@ -113,6 +129,16 @@ draft. `DRAFT_STYLE_CARDS=off` sends example posts instead.
 `npm run publish:drain` clears a queue of posts waiting to be drafted with
 all of them in parallel.
 See [`docs/PUBLISHING.md`](docs/PUBLISHING.md).
+
+## Screenshots
+
+Taken from a demo database with sample data.
+
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/feed.png) **Dashboard** — every post with source, translation, category, priority and how many channels reported it | ![Live Monitor](docs/screenshots/live.png) **Live Monitor** — the newest posts as they arrive, subsystem health and pipeline backlog |
+| ![Publishing](docs/screenshots/publishing.png) **Publishing** — per-channel cards, drafts, queue and published posts | ![Content](docs/screenshots/content.png) **Content inspector** — original text, every channel that relayed it, drafts, translation and classification |
+| ![Sources](docs/screenshots/sources.png) **Sources** — monitored channels and their poll status | ![Activity](docs/screenshots/activity.png) **Activity** — subsystem runs and errors |
 
 ## Translation providers
 
@@ -137,11 +163,32 @@ server and the web app) and opens the dashboard. To start at every Windows
 login, run once:
 `powershell -ExecutionPolicy Bypass -File autostart.ps1` (`-Remove` to undo).
 
-Useful commands (in `server/`):
+**Dashboard login** — create or reset it with the database running
+(in `server/`, PowerShell):
+
+```powershell
+npm run db:start; Start-Sleep 5; npm run seed:operator
+```
+
+It uses `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` from `server/.env`.
+`ECONNREFUSED ...:5434` means the database isn't running yet.
+
+**Telegram login** — if ingestion logs say the session was revoked
+(`AUTH_KEY_DUPLICATED`, e.g. after the same session was used from two
+places), stop the server, run `npm run telegram:login` and put the new session in
+`server/.env`.
+
+### Useful commands
+
+In `server/`:
 
 | Command | What it does |
 |---|---|
 | `npm run publish:check` | Posting status: config, queue, pace, next post time, bot admin rights |
+| `npm run publish:test-banner` | Sends one test post with a banner to check banners and bot rights |
+| `npm run ingest:check` | Why ingestion is failing: latest runs, their errors, recent poll successes |
+| `npm run telegram:login` | Logs the Telegram account in again; paste the printed session into `server/.env` |
+| `npm run seed:operator` | Creates or resets the dashboard login |
 | `npm run translate:check` | Tests each translator / LLM key |
 | `npm run translate:drain` | Clears the translation backlog |
 | `npm run translate:skip-old` | Takes posts older than 48 h out of the translation queue (`-- --restore` undoes it) |
@@ -173,9 +220,9 @@ web/       React + Vite frontend
 server/    Express API, ingestion/dedup/translation/publishing workers
 server/channels/  Channel config, style guides and writing rules
 db/        SQL migrations and seed scripts
-tools/     Optional local translators (NLLB)
+tools/     Optional local translators (NLLB), banner renderer (tools/banners)
 deploy/    GCP provisioning + systemd/nginx scripts (not yet used)
-docs/      Architecture, pipeline, publishing, database, security docs
+docs/      Architecture, pipeline, publishing, database, security docs, screenshots
 ```
 
 Design details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md),
