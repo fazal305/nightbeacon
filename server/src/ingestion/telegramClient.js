@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { Api, TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import { Logger, LogLevel } from 'telegram/extensions/Logger.js';
@@ -70,14 +71,43 @@ const clientHooks = [];
 
 let activeProxy = null;
 
+// Telegram cancels a login for good (AUTH_KEY_DUPLICATED) when it sees it
+// used from two internet addresses at once. Every process using the account
+// (the server, translate:check, sources:discover…) must therefore go through
+// the SAME proxy: the route in use is written to this file, and every
+// process starts from it.
+const ROUTE_FILE = () => process.env.TELEGRAM_ROUTE_FILE || '.telegram-route';
+
+function savedRouteKey() {
+  try {
+    return fs.readFileSync(ROUTE_FILE(), 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveRoute(proxy) {
+  try {
+    fs.writeFileSync(ROUTE_FILE(), routeKey(proxy));
+  } catch {
+    // read-only folder: nothing to share
+  }
+}
+
 function routes() {
   if (!candidates) {
     candidates = rankRoutes(buildProxyCandidates());
-    // Keep pointing at the route in use after the list is rebuilt.
-    const i = activeProxy ? candidates.findIndex((p) => routeKey(p) === routeKey(activeProxy)) : -1;
+    // Keep pointing at the route in use (this process's, else the one another
+    // process is using) after the list is rebuilt.
+    const want = activeProxy ? routeKey(activeProxy) : savedRouteKey();
+    const i = want ? candidates.findIndex((p) => routeKey(p) === want) : -1;
     candidateIndex = i > -1 ? i : 0;
   }
   return candidates;
+}
+
+export function isSessionRevoked(err) {
+  return /AUTH_KEY_DUPLICATED|AUTH_KEY_UNREGISTERED|SESSION_REVOKED|USER_DEACTIVATED/.test(err?.errorMessage || err?.message || '');
 }
 
 // Re-reads the configured + found proxy links, fastest first (after new
@@ -94,6 +124,7 @@ export function currentProxy() {
 function activate(c, proxy, idx) {
   candidateIndex = idx;
   activeProxy = proxy;
+  saveRoute(proxy);
   consecutiveConnectivityFailures = 0;
   client = c;
   trackConnectionState(c);
@@ -110,31 +141,35 @@ function activate(c, proxy, idx) {
 // proven first, and the old one is closed a little later so requests already
 // running on it can finish. Returns false (and keeps the current route) if
 // the new one doesn't work.
+//
+// The old connection is closed BEFORE the new one opens: the same login used
+// through two proxies at once (two internet addresses) makes Telegram cancel
+// it for good. Requests during the short gap wait for the reconnect.
 export async function switchRoute(proxy) {
   if (connecting || !client) return false;
-  const apiId = Number(process.env.TELEGRAM_API_ID);
-  const apiHash = process.env.TELEGRAM_API_HASH;
-  const sessionString = process.env.TELEGRAM_SESSION;
-  const started = Date.now();
-  let c;
-  try {
-    c = await connectRoute(proxy, { apiId, apiHash, sessionString, multipleRoutes: true });
-  } catch (err) {
-    console.warn(`[telegram] faster route ${describeProxy(proxy)} did not work (${err.message}) — staying`);
-    return false;
-  }
-  if (!client || connecting) {
-    c.destroy().catch(() => {});
-    return false;
-  }
   const old = client;
   const from = telegramStats.activeRoute;
+  const previous = activeProxy;
   const list = routes();
   const idx = list.findIndex((p) => routeKey(p) === routeKey(proxy));
-  activate(c, proxy, idx > -1 ? idx : candidateIndex);
-  console.log(`[telegram] switched from ${from} to faster ${describeProxy(proxy)} (connected in ${Date.now() - started} ms)`);
-  setTimeout(() => old.destroy().catch(() => {}), 30_000).unref?.();
-  return true;
+  if (idx < 0) return false;
+  client = null;
+  telegramStats.connected = false;
+  await old.destroy().catch(() => {});
+  // Reconnect through the faster route; if it fails, getTelegramClient goes
+  // back through the list starting from the previous route.
+  candidateIndex = idx;
+  try {
+    await getTelegramClient();
+  } catch {
+    candidateIndex = Math.max(0, list.findIndex((p) => routeKey(p) === routeKey(previous)));
+    return false;
+  }
+  if (activeProxy && routeKey(activeProxy) === routeKey(proxy)) {
+    console.log(`[telegram] switched from ${from} to faster ${describeProxy(proxy)}`);
+    return true;
+  }
+  return false;
 }
 
 // Connects through one route and proves it with a real request: GramJS's
@@ -227,6 +262,13 @@ export async function getTelegramClient() {
         activate(c, proxy, idx);
         return c;
       } catch (err) {
+        if (isSessionRevoked(err)) {
+          // Not the proxy: the login itself is gone. Every route would say
+          // the same, and trying them all only repeats the problem.
+          throw new Error(
+            `Telegram cancelled this login (${err.errorMessage || err.message}). Log in again: stop Nightbeacon, run "npm run telegram:login", put the new TELEGRAM_SESSION in server/.env, start again.`
+          );
+        }
         failures.push(`${label}: ${err.message}`);
         console.warn(`[telegram] route ${idx + 1}/${list.length} failed — ${label}: ${err.message}`);
       }

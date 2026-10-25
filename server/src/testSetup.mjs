@@ -12,3 +12,6 @@ dotenv.config({ path: new URL('../.env.test', import.meta.url) });
 // Translation tests translate every post unless they test the priority bar
 // (triage.js) themselves.
 process.env.TRANSLATE_MIN_PRIORITY ??= 'off';
+
+// The shared Telegram route file (telegramClient.js) goes to a temp folder.
+process.env.TELEGRAM_ROUTE_FILE ??= `${(await import('node:os')).tmpdir()}/nb-telegram-route-${process.pid}`;

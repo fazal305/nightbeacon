@@ -133,6 +133,8 @@ export function splitProxyLinks(text) {
 // direct connection (only when nothing is configured). Invalid entries are
 // reported and skipped rather than failing startup — one bad link in a long
 // list shouldn't stop the others from being used.
+const warnedLinks = new Set();
+
 export function buildProxyCandidates(env = process.env, { readFile = (f) => fs.readFileSync(f, 'utf8'), warn = console.warn } = {}) {
   const candidates = [];
   const single = buildProxyConfig(env);
@@ -157,7 +159,9 @@ export function buildProxyCandidates(env = process.env, { readFile = (f) => fs.r
       seen.add(key);
       candidates.push(proxy);
     } catch (err) {
-      warn(`[telegram] skipping proxy link (${err.message}): ${link.slice(0, 60)}`);
+      // Once per link: the list is rebuilt every few minutes.
+      if (!warnedLinks.has(link)) warn(`[telegram] skipping proxy link (${err.message}): ${link.slice(0, 60)}`);
+      warnedLinks.add(link);
     }
   }
   return candidates.length > 0 ? candidates : [undefined];

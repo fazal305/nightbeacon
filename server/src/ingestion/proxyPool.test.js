@@ -85,15 +85,17 @@ test('measureRoutes probes every proxy', async () => {
   assert.equal(r.length, 2);
 });
 
-test('a clearly faster proxy takes over; the old connection is closed later, not mid-request', async () => {
+test('a clearly faster proxy takes over; the old connection is closed BEFORE the new one opens (one address at a time)', async () => {
   process.env.TELEGRAM_PROXY_FOUND_FILE = path.join(os.tmpdir(), 'nb-none.txt');
   process.env.TELEGRAM_PROXY_LINKS = [link('10.4.0.1'), link('10.4.0.2'), link('10.4.0.3')].join(' ');
   const speed = { '10.4.0.1': 900, '10.4.0.2': 120, '10.4.0.3': 600 };
   _resetProxyMaintenanceForTests();
   const tc = await import('./telegramClient.js');
   const made = [];
+  const events = [];
   tc._setConnectRouteForTests(async (p) => {
-    const c = { name: p.ip, destroyed: false, addEventHandler() {}, async destroy() { this.destroyed = true; } };
+    events.push(`open ${p.ip}`);
+    const c = { name: p.ip, destroyed: false, addEventHandler() {}, async destroy() { this.destroyed = true; events.push(`close ${p.ip}`); } };
     made.push(c);
     return c;
   }, null);
@@ -102,8 +104,29 @@ test('a clearly faster proxy takes over; the old connection is closed later, not
   const report = await proxyCheck({ probe: async (p) => speed[p.ip], fetchLinks: async () => [] });
   assert.equal(report.switched, true);
   assert.equal((await tc.getTelegramClient()).name, '10.4.0.2');
-  assert.equal(first.destroyed, false, 'old connection left to finish its requests');
+  assert.deepEqual(events, ['open 10.4.0.1', 'close 10.4.0.1', 'open 10.4.0.2'], 'never two connections at once');
   tc._setConnectRouteForTests(null, null);
   delete process.env.TELEGRAM_PROXY_FOUND_FILE;
+  delete process.env.TELEGRAM_PROXY_LINKS;
+});
+
+test('a cancelled login (AUTH_KEY_DUPLICATED) stops the route cycling with a clear instruction; the route in use is shared', async () => {
+  const tc = await import('./telegramClient.js');
+  const tried = [];
+  tc._setConnectRouteForTests(async (p) => {
+    tried.push(p.ip);
+    throw Object.assign(new Error('406: AUTH_KEY_DUPLICATED (caused by InvokeWithLayer)'), { errorMessage: 'AUTH_KEY_DUPLICATED', code: 406 });
+  }, [route('10.5.0.1'), route('10.5.0.2'), route('10.5.0.3')]);
+  await assert.rejects(tc.getTelegramClient(), /cancelled this login[\s\S]*telegram:login/);
+  assert.equal(tried.length, 1, 'stops at the first route');
+
+  // Another process starts from the route the server is using.
+  fs.writeFileSync(process.env.TELEGRAM_ROUTE_FILE, '10.5.0.3:443:' + SECRET + '::');
+  const opened = [];
+  tc._setConnectRouteForTests(async (p) => (opened.push(p.ip), { name: p.ip, addEventHandler() {}, async destroy() {} }), null);
+  process.env.TELEGRAM_PROXY_LINKS = [link('10.5.0.1'), link('10.5.0.2'), link('10.5.0.3')].join(' ');
+  await tc.getTelegramClient();
+  assert.deepEqual(opened, ['10.5.0.3']);
+  tc._setConnectRouteForTests(null, null);
   delete process.env.TELEGRAM_PROXY_LINKS;
 });
