@@ -106,7 +106,7 @@ const UPLOAD_TIMEOUT_MS = Number(process.env.PUBLISH_MEDIA_TIMEOUT_SECONDS || 18
 // Uploads the post's photos/videos with the text as caption (an album when
 // there are several). Telegram captions are limited to 1024 characters, so a
 // longer text follows the media as its own message.
-async function sendWithMedia(client, peer, text, media, parseMode) {
+async function sendWithMedia(client, peer, text, media, parseMode, silent = false) {
   const files = media.map((m) => new CustomFile(m.name, fs.statSync(m.file).size, m.file));
   const fitsCaption = text.length <= CAPTION_LIMIT;
   const sent = await withTimeout(
@@ -117,6 +117,7 @@ async function sendWithMedia(client, peer, text, media, parseMode) {
       attributes: files.length === 1 ? uploadAttributes(media[0]) : media.map(uploadAttributes),
       supportsStreaming: true,
       workers: 1,
+      silent,
     }),
     UPLOAD_TIMEOUT_MS * media.length,
     'send media'
@@ -124,7 +125,7 @@ async function sendWithMedia(client, peer, text, media, parseMode) {
   const first = Array.isArray(sent) ? sent[0] : sent;
   if (fitsCaption) return { messageId: first.id, mediaCount: media.length };
   const message = await withTimeout(
-    client.sendMessage(peer, { message: text, parseMode, linkPreview: false }),
+    client.sendMessage(peer, { message: text, parseMode, linkPreview: false, silent }),
     REQUEST_TIMEOUT_MS,
     'sendMessage'
   );
@@ -133,14 +134,15 @@ async function sendWithMedia(client, peer, text, media, parseMode) {
 
 // `media`: files from loadItemMedia(). If the media can't be sent (refused,
 // upload error), the post still goes out as text; `mediaError` says why.
-export async function sendToChannel(text, channel, config, media = []) {
+// `silent`: delivered without a notification sound (see sender.js).
+export async function sendToChannel(text, channel, config, media = [], { silent = false } = {}) {
   const client = await getBotClient(config);
   const peer = await getChannelPeer(client, config, channel);
   const parseMode = channel.parseMode === 'html' || channel.parseMode === 'markdown' ? channel.parseMode : false;
   let mediaError = null;
   if (media.length > 0) {
     try {
-      return await sendWithMedia(client, peer, text, media, parseMode);
+      return await sendWithMedia(client, peer, text, media, parseMode, silent);
     } catch (err) {
       // A flood-wait applies to the text too: requeue. Anything else about
       // the media (refused, upload error or timeout) → post the text alone;
@@ -151,7 +153,7 @@ export async function sendToChannel(text, channel, config, media = []) {
     }
   }
   const message = await withTimeout(
-    client.sendMessage(peer, { message: text, parseMode, linkPreview: false }),
+    client.sendMessage(peer, { message: text, parseMode, linkPreview: false, silent }),
     REQUEST_TIMEOUT_MS,
     'sendMessage'
   );

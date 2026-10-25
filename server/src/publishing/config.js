@@ -48,6 +48,10 @@ import path from 'node:path';
 //   paceLike         a monitored channel's @username: its posts per hour of
 //                    the day (last 14 days) become this channel's hourly
 //                    limits, with maxPerHour as the ceiling (pace.js)
+//   notify           "breaking": only headline posts (BREAKING, URGENT, 🔴…),
+//                    summaries and Post now ring subscribers' phones; the
+//                    rest are delivered silently (default "all")
+//   quietHours       e.g. "01:00-08:00" (local time): every post is silent then
 //   enabled          false to pause a channel
 // Without a channels file, PUBLISH_CHANNEL (+ TELEGRAM_BOT_TOKEN) defines a
 // single bot channel, so the simple setup needs no file at all.
@@ -145,6 +149,9 @@ export function normalizeChannels(rawChannels, defaults) {
       exclusiveGroup: c.exclusiveGroup ? String(c.exclusiveGroup) : null,
       // Copy another channel's hourly posting pattern (pace.js).
       paceLike: c.paceLike ? String(c.paceLike).replace(/^@/, '') : null,
+      // "breaking": only headline posts notify subscribers (sender.js isSilent).
+      notify: c.notify === 'breaking' ? 'breaking' : 'all',
+      quietHours: /^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(c.quietHours || '') ? c.quietHours : null,
       banners: c.banners?.dir
         ? {
             dir: c.banners.dir,

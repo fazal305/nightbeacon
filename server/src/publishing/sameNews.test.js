@@ -29,3 +29,17 @@ test('pace: a channel follows another channel\'s hourly pattern, capped by its m
   assert.equal(limitsFor(ch, { timeZone: 'Asia/Karachi' }, now).maxPerHour, 1, 'at least one an hour');
   assert.equal(limitsFor({ ...ch, paceLike: null }, { timeZone: 'Asia/Karachi' }, now).maxPerHour, 6);
 });
+
+test('silent delivery: only headline posts ring with notify "breaking"; everything is silent in quiet hours', async () => {
+  const { isSilent } = await import('./sender.js');
+  const cfg = { timeZone: 'Asia/Karachi' };
+  const ch = { notify: 'breaking', quietHours: null };
+  assert.equal(isSilent({ kind: 'post', final_text: '🔴 BREAKING: strike on the port' }, ch, cfg), false);
+  assert.equal(isSilent({ kind: 'post', final_text: 'The ministry said talks continue.' }, ch, cfg), true);
+  assert.equal(isSilent({ kind: 'digest', final_text: 'Summary' }, ch, cfg), false);
+  assert.equal(isSilent({ kind: 'post', post_now: true, final_text: 'x' }, ch, cfg), false);
+  assert.equal(isSilent({ kind: 'post', final_text: 'x' }, { notify: 'all' }, cfg), false);
+  const h = localHour(new Date(), 'Asia/Karachi');
+  const quiet = { notify: 'all', quietHours: `${String(h).padStart(2, '0')}:00-${String((h + 1) % 24).padStart(2, '0')}:00` };
+  assert.equal(isSilent({ kind: 'post', final_text: '🔴 BREAKING' }, quiet, cfg), true);
+});

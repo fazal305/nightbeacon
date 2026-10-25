@@ -133,7 +133,7 @@ export async function getStyleContext(channel, { fetchExamples = fetchChannelExa
 // Finds the channel without contacts.ResolveUsername when possible — that
 // call is the one Telegram flood-waits for hours: first a monitored source
 // with a stored access hash, then the account's chats (archived ones too).
-async function findChannelPeer(client, channel) {
+export async function findChannelPeer(client, channel) {
   const wanted = channel.replace(/^@/, '').toLowerCase();
   const { rows } = await pool.query(
     `SELECT telegram_channel_id, telegram_access_hash FROM sources

@@ -4,7 +4,8 @@ import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.
 import { publishConfig, channelByKey } from './config.js';
 import { sendToChannel, resetBotClient } from './botClient.js';
 import { loadItemMedia, loadBestMedia } from './media.js';
-import { applyBanners } from './banners.js';
+import { applyBanners, isHeadlinePost } from './banners.js';
+import { localHour } from './pace.js';
 import { applyWatermark } from './watermark.js';
 import { findSameNews, sameNewsChannels } from './sameNews.js';
 import { limitsFor, refreshPaces } from './pace.js';
@@ -85,6 +86,21 @@ async function sourceMedia(pub, channel, loadMedia, config) {
     console.warn(`[publishing] could not fetch media for item ${pub.raw_item_id}: ${err.message} — posting text only`);
     return { media: [], note: `Posted as text only: couldn't get the media (${err.message})` };
   }
+}
+
+// Fewer buzzing phones, fewer mutes and leaves: with "notify": "breaking"
+// only headline posts (BREAKING / URGENT / 🔴 …), summaries and posts you
+// send with Post now make a sound; the rest arrive silently. "quietHours"
+// ("01:00-08:00", local time) makes everything silent at night.
+export function isSilent(pub, channel, config, now = new Date()) {
+  if (channel.quietHours) {
+    const [from, to] = channel.quietHours.split('-').map((t) => Number(t.split(':')[0]));
+    const h = localHour(now, config.timeZone);
+    if (from <= to ? h >= from && h < to : h >= from || h < to) return true;
+  }
+  if (channel.notify !== 'breaking') return false;
+  if (pub.kind === 'digest' || pub.post_now) return false;
+  return !isHeadlinePost(pub.final_text);
 }
 
 // The source's media, with the channel's own banners where they apply
@@ -182,7 +198,8 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
 
   try {
     const { media, note } = await mediaFor(pub, channel, loadMedia, config);
-    const sent = await send(pub.final_text, channel, config, media);
+    const silent = isSilent(pub, channel, config);
+    const sent = await send(pub.final_text, channel, config, media, { silent });
     const mediaCount = sent.mediaCount ?? media.length;
     const mediaNote = sent.mediaError ? `Posted as text only: Telegram refused the media (${sent.mediaError})` : note;
     await pool.query(

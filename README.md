@@ -78,6 +78,10 @@ Target channels are configured in `server/channels/channels.json`:
 - **Pace like Middle East Spectator** — `"paceLike": "Middle_East_Spectator"`:
   each hour's limit follows that channel's own posts per hour of the day
   (last 14 days), up to `maxPerHour`. See it with `npm run sources:pattern`.
+- **Quiet delivery** — `"notify": "breaking"`: only headline posts (BREAKING,
+  URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
+  arrive silently; `"quietHours": "06:00-10:00"` makes every post silent in
+  the audience's night (fewer mutes and leaves).
 - **Banners** — each bot channel has its own banner set built around its
   logo (`server/channels/banners/r3syst/` and `.../rmn/`: breaking, urgent,
   live, developing, statement, update, alert, summary). Re-render or change
@@ -143,6 +147,7 @@ Useful commands (in `server/`):
 | `npm run translate:skip-old` | Takes posts older than 48 h out of the translation queue (`-- --restore` undoes it) |
 | `npm run publish:drain` | Clears the queue of posts waiting to be drafted |
 | `npm run sources:list` | Lists monitored sources |
+| `npm run stats:posts` | What works on your channel: views/shares by hour, media, headline style, length; best and weakest posts |
 | `npm run sources:pattern` | A channel's posting pattern (default Middle East Spectator) |
 | `npm run sources:discover` → `npm run sources:add` | Finds candidate channels (similar channels, folders, mentions), then adds the ones you keep |
 | `npm run sources:official` | Builds `official-sources.md` from a Telegram folder link |
