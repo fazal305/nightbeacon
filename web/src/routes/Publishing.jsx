@@ -45,6 +45,71 @@ function StatusBar({ status, t }) {
   );
 }
 
+// One card per channel: how it posts right now — this hour's limit (and the
+// channel whose pattern sets it), activity, notification rules, banners,
+// watermark, which channels it never repeats a story with.
+function ChannelPanel({ status, t }) {
+  const channels = status?.channels || [];
+  if (channels.length === 0) return null;
+  const chip = (on, label) => (
+    <span className={`rounded border px-1.5 py-0.5 ${on ? 'border-status-good/60 text-status-good' : 'border-border text-text-muted'}`}>
+      {on ? '✓' : '–'} {label}
+    </span>
+  );
+  return (
+    <div className="grid gap-2 border-b border-border bg-panel px-4 py-3 sm:grid-cols-2 xl:grid-cols-4">
+      {channels.map((c) => {
+        const bot = c.delivery === 'bot';
+        const full = bot && c.postedLastHour >= c.limitThisHour;
+        return (
+          <div key={c.key} className="space-y-1.5 rounded border border-border bg-bg p-2 text-xs text-text-muted">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-sm text-text">{c.name}</span>
+              <span className="rounded border border-border px-1.5 py-0.5">{t(`publishing.delivery.${c.delivery}`)}</span>
+            </div>
+            {bot && (
+              <div>
+                <span className={full ? 'text-priority-medium' : 'text-text'}>
+                  {t('publishing.ch.thisHour', { posted: c.postedLastHour, limit: c.limitThisHour })}
+                </span>
+                {' · '}
+                {c.paceLike
+                  ? t('publishing.ch.paceLike', { channel: c.paceLike, max: c.maxPerHour })
+                  : t('publishing.ch.paceFixed', { max: c.maxPerHour })}
+                {' · '}
+                {t('publishing.ch.gap', { minutes: c.minGapMinutes })}
+              </div>
+            )}
+            <div>
+              {t('publishing.ch.activity', { today: c.postedToday, blocked: c.repeatsBlocked })}
+              {c.lastPostedAt && ` · ${t('publishing.ch.last', { time: when(c.lastPostedAt) })}`}
+            </div>
+            {bot && (
+              <div>
+                {c.notify === 'breaking' ? t('publishing.ch.notifyBreaking') : t('publishing.ch.notifyAll')}
+                {c.quietHours && (
+                  <>
+                    {' · '}
+                    <span className={c.silentNow ? 'text-accent' : ''}>
+                      {t(c.silentNow ? 'publishing.ch.quietNow' : 'publishing.ch.quiet', { hours: c.quietHours, zone: status.timeZone })}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-1">
+              {chip(c.banners, t('publishing.ch.banners'))}
+              {chip(c.watermark, t('publishing.ch.watermark'))}
+              {chip(c.digestTimes.length > 0, c.digestTimes.length ? t('publishing.ch.digest', { times: c.digestTimes.join(', ') }) : t('publishing.ch.noDigest'))}
+            </div>
+            {c.exclusiveWith.length > 0 && <div>{t('publishing.ch.exclusive', { channels: c.exclusiveWith.join(', ') })}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // The source post's photos/videos, fetched from Telegram on request: shown
 // as previews with download links, for attaching when posting by hand.
 function MediaPanel({ rawItemId, t }) {
@@ -264,6 +329,7 @@ export default function Publishing() {
         <h1 className="font-mono text-base text-text">{t('nav.publishing')}</h1>
       </div>
       <StatusBar status={status.data} t={t} />
+      <ChannelPanel status={status.data} t={t} />
       <div className="flex flex-wrap gap-2 border-b border-border bg-panel px-4 py-2">
         {GROUPS.map((g) => (
           <button

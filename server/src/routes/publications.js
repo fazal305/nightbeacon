@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { publishConfig, channelByKey } from '../publishing/config.js';
-import { publishGate, publishingStats } from '../publishing/sender.js';
+import { publishGate, publishingStats, isSilent } from '../publishing/sender.js';
+import { limitsFor, refreshPaces } from '../publishing/pace.js';
 import { loadBestMedia } from '../publishing/media.js';
 import { describeError } from '../db/describeError.js';
 
@@ -99,13 +100,50 @@ publicationsRouter.get('/status', h(async (req, res) => {
     return res.json({ configError: err.message, channels: [], counts: {} });
   }
   const { rows } = await pool.query(`SELECT status, count(*)::int AS n FROM publications GROUP BY status`);
+  // Per channel: posts in the last hour / today, repeats blocked today.
+  const { rows: activity } = await pool.query(
+    `SELECT channel_key,
+            count(*) FILTER (WHERE status IN ('published', 'sent_manually') AND published_at > now() - interval '1 hour')::int AS last_hour,
+            count(*) FILTER (WHERE status IN ('published', 'sent_manually') AND published_at > now() - interval '24 hours')::int AS last_day,
+            count(*) FILTER (WHERE status = 'rejected' AND last_error LIKE 'same news as post%' AND updated_at > now() - interval '24 hours')::int AS repeats_blocked,
+            max(published_at) AS last_posted_at
+     FROM publications GROUP BY channel_key`
+  );
+  await refreshPaces(config).catch(() => {});
   const gate = publishGate(config);
   res.json({
     mode: config.mode,
     channelsFile: config.channelsFile,
-    channels: config.channels.map(({ key, name, telegram, delivery, draftPriorities, autoPriorities }) => ({
-      key, name, telegram, delivery, draftPriorities, autoPriorities,
-    })),
+    timeZone: config.timeZone,
+    channels: config.channels.map((c) => {
+      const a = activity.find((r) => r.channel_key === c.key) || {};
+      const limit = limitsFor(c, config);
+      return {
+        key: c.key,
+        name: c.name,
+        telegram: c.telegram,
+        delivery: c.delivery,
+        draftPriorities: c.draftPriorities,
+        autoPriorities: c.autoPriorities,
+        maxPerHour: c.maxPerHour,
+        limitThisHour: limit.maxPerHour,
+        minGapMinutes: Math.round(limit.minGapMinutes * 10) / 10,
+        paceLike: c.paceLike,
+        exclusiveWith: c.exclusiveGroup
+          ? config.channels.filter((o) => o.key !== c.key && o.exclusiveGroup === c.exclusiveGroup).map((o) => o.name)
+          : [],
+        notify: c.notify,
+        quietHours: c.quietHours,
+        silentNow: isSilent({ kind: 'post', final_text: '' }, { ...c, notify: 'all' }, config),
+        banners: Boolean(c.banners),
+        watermark: Boolean(c.banners?.watermark),
+        digestTimes: c.digest?.times || [],
+        postedLastHour: a.last_hour || 0,
+        postedToday: a.last_day || 0,
+        repeatsBlocked: a.repeats_blocked || 0,
+        lastPostedAt: a.last_posted_at || null,
+      };
+    }),
     botConfigured: Boolean(config.botToken),
     draftProvider: config.draftProvider,
     minIntervalSeconds: config.minIntervalSeconds,
