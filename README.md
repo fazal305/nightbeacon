@@ -109,7 +109,7 @@ last 24 h and repeats blocked.
   last burst. On the Publishing page, **⚡ Big event: post more for 3 hours**
   turns it on by hand and **Back to normal pace** turns it off. Thresholds:
   `SURGE_RATIO`, `SURGE_MIN_STORIES`, `SURGE_STORY_REPORTS`,
-  `SURGE_HOLD_HOURS` in `.env`; `npm run publish:check` shows the
+  `SURGE_HOLD_HOURS` in `server/.env`; `npm run publish:check` shows the
   current numbers next to them.
 - **Quiet delivery** — `"notify": "breaking"`: only headline posts (BREAKING,
   URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
