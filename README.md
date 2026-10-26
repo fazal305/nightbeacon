@@ -48,15 +48,12 @@ ready-to-copy drafts for the rest.
 
 ## Publishing
 
-Target channels are configured in `server/channels/channels.json`:
+Target channels are configured in `server/channels/channels.json`.
 
-| Channel | Delivery | Limit | Notes |
-|---|---|---|---|
-| @r3syst | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, re-paced weekly from last week's views, up to 3/hour | summaries at 09:00 and 21:00 · quiet hours 06:00–10:00 |
-| @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, re-paced weekly from last week's views, up to 2/hour | quiet hours 02:00–07:00 |
-| @GiviDpr, @RezistanceTrench1 | Drafts in the dashboard — Copy, then Mark as sent | 2/hour | unsent drafts expire after 6 hours |
-
-Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `surge`, `exclusiveGroup`,
+Each channel is either a **bot channel** (your bot is an admin there and
+posts by itself) or a **manual channel** (drafts wait in the dashboard:
+Copy, post it yourself, then Mark as sent; unsent drafts expire after 6
+hours). Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `surge`, `exclusiveGroup`,
 `notify`, `quietHours`, `digest`, `banners`) are in `channels.json`; the
 Publishing page shows them per channel, with posts this hour, posted in the
 last 24 h and repeats blocked.
@@ -65,14 +62,13 @@ last 24 h and repeats blocked.
   official source 2 × has media 1.2 × freshness. Each bot channel's hourly
   limit and minimum gap are enforced at send time (Post now and summaries
   are exempt). Stale unsent posts expire.
-- **Writing rules** — facts only; neutral attribution ("CENTCOM said", "IRGC
-  said"); no mention of which channels reported it; no 🇮🇱 emoji.
-  Editable text files in `server/channels/`:
-  - `terminology.md` — wording replacements (IDF → IOF, Houthis → Ansarallah,
-    Israel → I̶s̶r̶a̶e̶l̶, …)
+- **Writing rules** — facts only, with attribution to whoever made a claim;
+  no mention of which channels reported it. Editable text files in
+  `server/channels/`:
+  - `terminology.md` — wording replacements
   - `official-sources.md` — the only channels whose statements are treated
     as official; those statements are posted word for word (translated only)
-  - `house-rules.md` — extra house style (e.g. "martyred" usage)
+  - `house-rules.md` — extra house style
   - `<channel>.md` — each channel's style guide
 - **Media** — the source's photos/videos (whole albums) are reposted with the
   text, preferring the cleanest copy: the official channel's upload first;
@@ -80,9 +76,9 @@ last 24 h and repeats blocked.
   copies are compared (frame hashes, length, sound) and the one without a
   channel's logo is used, then the highest resolution, then the earliest. If media fails the post still goes out as text, and the
   reason is shown in the dashboard.
-- **No repeats** — R3SYST and RMN share `"exclusiveGroup": "bots"`: a story
-  one of them used is never picked for the other, and every finished post is
-  compared with what both posted in the last 12 hours (same words, or a good
+- **No repeats** — channels that share an `"exclusiveGroup"` never post the
+  same story: a story one of them used is never picked for the others, and
+  every finished post is compared with what they all posted in the last 12 hours (same words, or a good
   overlap plus the same figures) before it is queued and again before it is
   sent, so the same news isn't posted twice even when two reports weren't
   matched as one story.
@@ -93,8 +89,7 @@ last 24 h and repeats blocked.
   day. That becomes the plan for the coming week:
   - hours whose posts were seen more get more posts, hours that weren't get
     fewer, but never less than one post per two hours;
-  - the day averages `postsPerHour` (1 for both bot channels) and no hour
-    goes above `maxPerHour` (R3SYST 3, RMN 2);
+  - the day averages `postsPerHour` and no hour goes above `maxPerHour`;
   - hours with few posts last week lean towards the average;
   - until the first plan is read, the channel posts `postsPerHour`.
 
@@ -102,8 +97,7 @@ last 24 h and repeats blocked.
   `npm run publish:check` shows the plan per hour and the day it was read;
   `npm run stats:posts` shows the views behind it.
 - **Big-event mode** — `"surge": { "maxPerHour": 6 }`: when something
-  major breaks, R3SYST may post up to 6 an hour and RMN up to 4 (10 and 15
-  minutes apart). It turns on by itself when high-priority stories in the
+  major breaks, the channel may post up to that many an hour. It turns on by itself when high-priority stories in the
   last hour reach 3× last week's hourly average (and at least 12), or one
   story is reported by 40+ channels, and stays on until 2 hours after the
   last burst. On the Publishing page, **⚡ Big event: post more for 3 hours**
@@ -115,9 +109,9 @@ last 24 h and repeats blocked.
   URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
   arrive silently; `"quietHours": "06:00-10:00"` makes every post silent in
   the audience's night (fewer mutes and leaves).
-- **Banners** — each bot channel has its own banner set built around its
-  logo (`server/channels/banners/r3syst/` and `.../rmn/`: breaking, urgent,
-  live, developing, statement, update, alert, summary). Re-render or change
+- **Banners** — each bot channel can have its own banner set built around
+  its logo (`server/channels/banners/<channel>/`: breaking, urgent, live,
+  developing, statement, update, alert, summary). Re-render or change
   labels with `node tools/banners/render-logo-banners.mjs` (logos:
   `tools/banners/*-logo.png`). A source photo that is only another channel's
   generic "breaking news" card (recognised from examples in
@@ -137,8 +131,6 @@ last 24 h and repeats blocked.
 - **Performance** — `npm run stats:posts` reads views and shares of your own
   posts and reports what works: hour of day, media vs. text, headline style,
   length, best and weakest posts.
-
-![Banners](docs/screenshots/banners.jpg)
 
 Drafting uses an LLM rotation across Groq, Gemini, Cerebras, Mistral,
 GitHub Models, NVIDIA, SambaNova, Cohere, OpenRouter, Cloudflare, Hugging
