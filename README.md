@@ -270,4 +270,14 @@ The Telegram session, bot token and API keys live only in the gitignored
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+Dual-licensed:
+
+- **[AGPL-3.0-or-later](LICENSE)** — free to use, change and share; if you
+  run a modified version for other people (a hosted service, posting for
+  someone else's channels), you must share your source code with them under
+  the same license.
+- **[Commercial license](COMMERCIAL-LICENSE.md)** — for using it without
+  those conditions (closed-source products, paid hosting without sharing
+  changes). Contact [@fazal305](https://github.com/fazal305).
+
+Copyright (c) 2026 Fazal Abbas.
