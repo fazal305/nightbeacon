@@ -90,10 +90,10 @@ async function main() {
     const lim = limitsFor(channel, config);
     if (channel.pace === 'stats') {
       const plan = ownPace(channel);
-      if (!plan) bad(`${channel.telegram}: its view stats haven't been read yet (the server does it every 6 hours) — ${channel.postsPerHour}/hour meanwhile`);
+      if (!plan) bad(`${channel.telegram}: its view stats haven't been read yet (the server reads them at start and then weekly) — ${channel.postsPerHour}/hour meanwhile`);
       else {
         const now = localHour(new Date(), config.timeZone);
-        info(`${channel.telegram}: pace from its own views (${plan.posts} posts) — about ${Math.round(plan.rates.reduce((s, r) => s + r, 0))} posts/day, ${plan.rates[now]}/hour now`);
+        info(`${channel.telegram}: pace from last week's views (${plan.posts} posts, read ${new Date(plan.at).toLocaleDateString()}) — about ${Math.round(plan.rates.reduce((s, r) => s + r, 0))} posts/day, ${plan.rates[now]}/hour now`);
         info(`  per hour (${config.timeZone}): ${plan.rates.map((r, h) => `${String(h).padStart(2, '0')}h ${r}`).join(' · ')}`);
       }
     }

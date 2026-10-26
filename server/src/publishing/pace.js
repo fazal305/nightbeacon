@@ -41,16 +41,17 @@ export async function paceProfile(username, timeZone, { days = 14 } = {}) {
   return profile;
 }
 
-// Pace from the channel's own stats ("pace": "stats"): its posts of the last
-// 15 days (older than a day, so views have settled) are read with the
+// Pace from the channel's own stats ("pace": "stats"): once a week its posts
+// of the previous week (1–8 days old, so views have settled) are read with the
 // monitoring account, and the average views per post at each hour of the day
 // decide how much of the day's budget (postsPerHour × 24) that hour gets:
 // more where posts are seen, fewer where they aren't. Hours with few posts
 // lean towards the average, every hour keeps at least one post per two hours
 // (or postsPerHour if lower), and maxPerHour stays the ceiling. Only the
-// server process reads Telegram (every 6 hours); the hourly views are kept in
-// app_state so the dashboard and check scripts see the same pace.
-const STATS_REFRESH_MS = 6 * 3600_000;
+// server process reads Telegram; the hourly views are kept in app_state, so
+// the week's plan survives restarts and the dashboard and check scripts see
+// the same pace.
+const STATS_REFRESH_MS = 7 * 86400_000;
 const STATS_RELOAD_MS = 10 * 60_000;
 const STATS_RETRY_MS = 30 * 60_000;
 const MIN_POSTS = 20;
@@ -81,7 +82,7 @@ export function paceRates(hours, { target, max }) {
   return score.map((x) => Math.round(Math.min(max, Math.max(floor, (target * x) / mean)) * 100) / 100);
 }
 
-async function fetchSettledPosts(channel, days = 15) {
+async function fetchSettledPosts(channel, days = 8) {
   const [{ getTelegramClient, withTimeout, REQUEST_TIMEOUT_MS }, { findChannelPeer }] = await Promise.all([
     import('../ingestion/telegramClient.js'),
     import('./style.js'),
@@ -139,12 +140,13 @@ async function refreshOwnPace(channel, config, { fetch, fetchPosts }) {
       /* rebuilt below */
     }
   }
-  const stale = !entry.stats || now - entry.stats.at > STATS_REFRESH_MS;
+  // (Stats saved before the weekly window have no `week`: read again.)
+  const stale = !entry.stats?.week || now - entry.stats.at > STATS_REFRESH_MS;
   if (!fetch || !stale || (entry.triedAt && now - entry.triedAt < STATS_RETRY_MS)) return;
   entry.triedAt = now;
   try {
     const posts = await fetchPosts(channel);
-    entry.stats = { at: now, posts: posts.length, hours: hourlyViews(posts, config.timeZone) };
+    entry.stats = { at: now, week: true, posts: posts.length, hours: hourlyViews(posts, config.timeZone) };
     await setState(`pace:${channel.key}`, JSON.stringify(entry.stats));
   } catch (err) {
     console.warn(`[publishing] could not read ${channel.telegram}'s stats for its pace: ${err.message}`);

@@ -86,13 +86,14 @@ last 24 h and repeats blocked.
   overlap plus the same figures) before it is queued and again before it is
   sent, so the same news isn't posted twice even when two reports weren't
   matched as one story.
-- **Pace from the channel's own stats** — `"pace": "stats"`: every 6 hours
-  the server reads the channel's posts of the last 15 days (older than a day,
+- **Pace from the channel's own stats** — `"pace": "stats"`: once a week
+  the server reads the channel's posts of the previous week (1–8 days old,
   so views have settled) and works out the average views per post at each
   hour of the day. Hours whose posts get seen more get more posts, hours
   that don't get fewer (at least one per two hours), averaging
   `postsPerHour` over the day and never above `maxPerHour`. Until the stats
-  are read, it posts `postsPerHour`. `npm run publish:check` shows the
+  are read, it posts `postsPerHour`. The week's plan survives restarts.
+  `npm run publish:check` shows the
   plan per hour; `npm run stats:posts` shows the views behind it.
 - **Quiet delivery** — `"notify": "breaking"`: only headline posts (BREAKING,
   URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
