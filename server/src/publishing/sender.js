@@ -7,7 +7,7 @@ import { loadItemMedia, loadBestMedia } from './media.js';
 import { applyBanners, isHeadlinePost } from './banners.js';
 import { localHour } from './pace.js';
 import { applyWatermark } from './watermark.js';
-import { findSameNews, sameNewsChannels } from './sameNews.js';
+import { findRepeat } from './sameNews.js';
 import { limitsFor, refreshPaces } from './pace.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
@@ -185,7 +185,7 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   // Last duplicate check: the same news may have gone out on this channel
   // (or another in its exclusiveGroup) since the post was queued.
   if (pub.kind === 'post' && !pub.post_now && pub.origin === 'auto') {
-    const same = await findSameNews(pub.final_text, sameNewsChannels(config, channel), { exceptId: pub.id }).catch(() => null);
+    const same = await findRepeat(pub.final_text, config, channel, { exceptId: pub.id }).catch(() => null);
     if (same) {
       await pool.query(`UPDATE publications SET status = 'rejected', last_error = $2, updated_at = now() WHERE id = $1`, [
         pub.id,

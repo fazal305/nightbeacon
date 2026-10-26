@@ -470,6 +470,30 @@ test('exclusiveGroup: a story one bot channel used is not picked for the other; 
   assert.match(rows[0].last_error, /same news as post #\d+ on main/);
 });
 
+test('exclusiveGroup in big-event mode: the same story may go on both channels, but not the same post', async () => {
+  const { _setSurgeForTests } = await import('./surge.js');
+  const SECOND = { key: 'second', telegram: '@second', delivery: 'bot', draftPriorities: ['high'], autoPriorities: ['high'], minGapMinutes: 0, settleMinutes: 0, maxPerHour: 60 };
+  setChannels([{ ...MAIN, exclusiveGroup: 'g', minGapMinutes: 0, settleMinutes: 0, maxPerHour: 60, surge: { maxPerHour: 6 } }, { ...SECOND, exclusiveGroup: 'g', surge: { maxPerHour: 6 } }]);
+  _setSurgeForTests({ since: new Date().toISOString(), until: new Date(Date.now() + 3600_000).toISOString(), reason: 'test', manual: true });
+  try {
+    const used = await readyItem({ text: 'Large explosion reported at the airbase, several aircraft damaged according to officials.' });
+    await pool.query(`INSERT INTO publications (raw_item_id, channel_key, status, origin, final_text, published_at, score)
+                      VALUES ($1, 'main', 'published', 'auto', '🔴 Large explosion at the airbase, several aircraft damaged, officials said. #Base', now(), 10)`, [used]);
+    // Same story, written differently for the second channel: allowed.
+    await runDraftingTick({ llm: fakeLLM(() => 'BREAKING | Airbase blast: officials report damage to several jets.\n@second'), styleFn: style });
+    const second = await pubFor(used, 'second');
+    assert.ok(second && ['draft', 'approved'].includes(second.status), `second channel covers the same story (${second?.status} ${second?.last_error || ''})`);
+
+    // Nearly the same post: rejected.
+    const again = await readyItem({ text: 'Officials: several aircraft damaged in a large explosion at the airbase.' });
+    await runDraftingTick({ llm: fakeLLM(() => '🔴 Large explosion at the airbase, several aircraft damaged, officials said. #Base'), styleFn: style });
+    const { rows } = await pool.query(`SELECT status, last_error FROM publications WHERE raw_item_id = $1 AND status = 'rejected'`, [again]);
+    assert.ok(rows.length >= 1 && /same news as post/.test(rows[0].last_error), 'an identical post is still blocked');
+  } finally {
+    _setSurgeForTests(null);
+  }
+});
+
 test('drafter: automatic drafts queued before scored selection (no score) are expired, not posted', async () => {
   const item = await readyItem();
   await pool.query(`INSERT INTO publications (raw_item_id, channel_key, origin, status, final_text) VALUES ($1, 'main', 'auto', 'approved', 'old')`, [item]);

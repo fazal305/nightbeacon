@@ -4,7 +4,8 @@ import { RateGate } from '../pipeline/rateGate.js';
 import { publishConfig, channelByKey } from './config.js';
 import { getStyleContext } from './style.js';
 import { runDigestTick } from './digest.js';
-import { findSameNews, sameNewsChannels } from './sameNews.js';
+import { findRepeat, sameNewsChannels } from './sameNews.js';
+import { surgeActive } from './surge.js';
 import { limitsFor, refreshPaces } from './pace.js';
 import {
   buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags,
@@ -113,8 +114,9 @@ async function queueAutomaticDrafts(config) {
     );
     if (recent.n >= maxPerHour) continue;
     if (recent.last_at && Date.now() - new Date(recent.last_at).getTime() < minGapMinutes * 60_000) continue;
-    // Stories already used by another channel of its exclusiveGroup.
-    const others = sameNewsChannels(config, channel).filter((k) => k !== channel.key);
+    // Stories already used by another channel of its exclusiveGroup (in
+    // big-event mode they may share stories, just not posts).
+    const others = surgeActive() ? [] : sameNewsChannels(config, channel).filter((k) => k !== channel.key);
 
     const { rowCount } = await pool.query(
       `WITH candidate AS (
@@ -219,7 +221,7 @@ async function saveDraft(pub, channel, item, draft, model, config) {
   const text = removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology), config.bannedEmoji);
   // Second duplicate check, on the finished post (automatic ones only).
   if (pub.origin === 'auto') {
-    const same = await findSameNews(text, sameNewsChannels(config, channel), { exceptId: pub.id });
+    const same = await findRepeat(text, config, channel, { exceptId: pub.id });
     if (same) {
       await pool.query(
         `UPDATE publications SET status = 'rejected', draft_text = $2, final_text = $2, model = $3, drafted_at = now(),

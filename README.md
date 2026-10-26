@@ -91,7 +91,8 @@ last 24 h and repeats blocked.
   every finished post is compared with what they all posted in the last 12 hours (same words, or a good
   overlap plus the same figures) before it is queued and again before it is
   sent, so the same news isn't posted twice even when two reports weren't
-  matched as one story.
+  matched as one story. In big-event mode they may cover the same story,
+  but never with the same (nearly identical) post.
 - **Weekly pace from the channel's own stats** — `"pace": "stats"`: once a
   week (and when the server starts without a plan) the server reads the
   channel's posts of the previous week, 1–8 days old so their views have

@@ -1,4 +1,5 @@
 import { pool } from '../db/pool.js';
+import { surgeActive } from './surge.js';
 
 // Second duplicate check, on the finished English posts: the same event can
 // reach the queue twice when two reports weren't matched as one story (other
@@ -9,6 +10,9 @@ import { pool } from '../db/pool.js';
 const WINDOW_HOURS = Number(process.env.SAME_NEWS_WINDOW_HOURS || 12);
 const SAME = Number(process.env.SAME_NEWS_SIMILARITY || 0.5);
 const SAME_WITH_NUMBERS = Number(process.env.SAME_NEWS_SIMILARITY_WITH_NUMBERS || 0.3);
+// Big-event mode: channels of one exclusiveGroup may cover the same story,
+// but not with (nearly) the same post.
+const SAME_POST = Number(process.env.SAME_POST_SIMILARITY || 0.8);
 
 const STOP = new Set(
   'the and for that with from this have has had was were are been will would said says say after over into about their they them than then there which while also more most other some such only just what when where who whom whose why how its his her our out not but can could should may might all any each both few new now one two three per via amid near under upon against between during without within'.split(' ')
@@ -52,9 +56,13 @@ export function isSameNews(a, b) {
   return false;
 }
 
+export function isSamePost(a, b) {
+  return similarity(a, b) >= SAME_POST;
+}
+
 // The recent post on `channelKeys` that carries the same news as `text`
 // (excluding publication `exceptId`), or null.
-export async function findSameNews(text, channelKeys, { exceptId = null } = {}) {
+export async function findSameNews(text, channelKeys, { exceptId = null, match = isSameNews } = {}) {
   if (!text || channelKeys.length === 0) return null;
   const { rows } = await pool.query(
     `SELECT id, channel_key, final_text FROM publications
@@ -63,7 +71,19 @@ export async function findSameNews(text, channelKeys, { exceptId = null } = {}) 
        AND coalesce(published_at, approved_at, updated_at) > now() - make_interval(hours => $3)`,
     [channelKeys, exceptId, WINDOW_HOURS]
   );
-  return rows.find((r) => isSameNews(text, r.final_text)) || null;
+  return rows.find((r) => match(text, r.final_text)) || null;
+}
+
+// The post `text` would repeat: the same news on this channel or another of
+// its exclusiveGroup. In big-event mode the others may carry the same story,
+// so only a (nearly) identical post counts there.
+export async function findRepeat(text, config, channel, { exceptId = null, surge = Boolean(surgeActive()) } = {}) {
+  const group = sameNewsChannels(config, channel);
+  if (!surge) return findSameNews(text, group, { exceptId });
+  return (
+    (await findSameNews(text, [channel.key], { exceptId })) ||
+    findSameNews(text, group.filter((k) => k !== channel.key), { exceptId, match: isSamePost })
+  );
 }
 
 // Channels a post must not repeat: its own and the others in its exclusiveGroup.
