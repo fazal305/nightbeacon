@@ -9,7 +9,7 @@ import { Api } from 'telegram';
 import { pool } from '../db/pool.js';
 import { describeError } from '../db/describeError.js';
 import { withTimeout, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
-import { limitsFor, refreshPaces, paceProfile } from './pace.js';
+import { limitsFor, refreshPaces, paceProfile, ownPace, localHour } from './pace.js';
 import { publishConfig } from './config.js';
 import { getBotClient, getChannelPeer, sendToChannel } from './botClient.js';
 
@@ -85,9 +85,18 @@ async function main() {
   for (const e of errors) bad(`${e.channel_key} (${e.status}): ${e.last_error}`);
 
   console.log('\n4. Posting pace (bot channels, last hour)');
-  await refreshPaces(config);
+  await refreshPaces(config, { fetch: false });
   for (const channel of config.channels.filter((c) => c.delivery === 'bot')) {
     const lim = limitsFor(channel, config);
+    if (channel.pace === 'stats') {
+      const plan = ownPace(channel);
+      if (!plan) bad(`${channel.telegram}: its view stats haven't been read yet (the server does it every 6 hours) — ${channel.postsPerHour}/hour meanwhile`);
+      else {
+        const now = localHour(new Date(), config.timeZone);
+        info(`${channel.telegram}: pace from its own views (${plan.posts} posts) — about ${Math.round(plan.rates.reduce((s, r) => s + r, 0))} posts/day, ${plan.rates[now]}/hour now`);
+        info(`  per hour (${config.timeZone}): ${plan.rates.map((r, h) => `${String(h).padStart(2, '0')}h ${r}`).join(' · ')}`);
+      }
+    }
     if (channel.paceLike) {
       const p = await paceProfile(channel.paceLike, config.timeZone);
       if (p.days < 3) bad(`paceLike @${channel.paceLike}: only ${p.days} day(s) of its posts stored — check the username (npm run sources:list); using maxPerHour meanwhile`);

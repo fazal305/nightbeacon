@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { publishConfig, channelByKey } from '../publishing/config.js';
 import { publishGate, publishingStats, isSilent } from '../publishing/sender.js';
-import { limitsFor, refreshPaces } from '../publishing/pace.js';
+import { limitsFor, refreshPaces, ownPace } from '../publishing/pace.js';
 import { loadBestMedia } from '../publishing/media.js';
 import { describeError } from '../db/describeError.js';
 
@@ -109,7 +109,8 @@ publicationsRouter.get('/status', h(async (req, res) => {
             max(published_at) AS last_posted_at
      FROM publications GROUP BY channel_key`
   );
-  await refreshPaces(config).catch(() => {});
+  // The server's workers read the stats; the page only shows what they saved.
+  await refreshPaces(config, { fetch: false }).catch(() => {});
   const gate = publishGate(config);
   res.json({
     mode: config.mode,
@@ -128,7 +129,11 @@ publicationsRouter.get('/status', h(async (req, res) => {
         maxPerHour: c.maxPerHour,
         limitThisHour: limit.maxPerHour,
         minGapMinutes: Math.round(limit.minGapMinutes * 10) / 10,
-        paceLike: c.paceLike,
+        paceLike: c.pace ? null : c.paceLike,
+        pace: c.pace,
+        postsPerHour: c.postsPerHour,
+        // Posts per day the stats plan allows (null until the stats are read).
+        planPerDay: c.pace === 'stats' ? (ownPace(c) ? Math.round(ownPace(c).rates.reduce((x, r) => x + r, 0)) : null) : null,
         exclusiveWith: c.exclusiveGroup
           ? config.channels.filter((o) => o.key !== c.key && o.exclusiveGroup === c.exclusiveGroup).map((o) => o.name)
           : [],

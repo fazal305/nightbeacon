@@ -8,7 +8,7 @@
 import 'dotenv/config';
 import { getTelegramClient, withTimeout, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
 import { findChannelPeer } from './style.js';
-import { localHour } from './pace.js';
+import { localHour, readChannelPosts } from './pace.js';
 import { isHeadlinePost } from './banners.js';
 import { pool } from '../db/pool.js';
 
@@ -30,33 +30,9 @@ export function summarise(posts) {
 async function main() {
   const client = await getTelegramClient();
   const peer = await findChannelPeer(client, channel);
-  const since = Date.now() - days * 86400_000;
   const dayOld = Date.now() - 86400_000;
-  const posts = [];
-  let offsetId = 0;
-  for (let page = 0; page < 20; page++) {
-    const batch = await withTimeout(client.getMessages(peer, { limit: 100, offsetId }), REQUEST_TIMEOUT_MS, 'read channel');
-    if (!batch.length) break;
-    for (const m of batch) {
-      const at = m.date * 1000;
-      if (at < since) continue;
-      if (!m.message && !m.media) continue;
-      posts.push({
-        at,
-        text: m.message || '',
-        views: m.views || 0,
-        forwards: m.forwards || 0,
-        reactions: (m.reactions?.results || []).reduce((s, r) => s + (r.count || 0), 0),
-        media: Boolean(m.media),
-        grouped: m.groupedId ? m.groupedId.toString() : null,
-      });
-    }
-    offsetId = batch[batch.length - 1].id;
-    if (batch[batch.length - 1].date * 1000 < since) break;
-  }
-  // Albums: keep the message with the caption (or the first).
-  const seen = new Set();
-  const all = posts.filter((p) => (p.grouped ? (seen.has(p.grouped) ? false : (seen.add(p.grouped), true)) : true));
+  const read = (opts) => withTimeout(client.getMessages(peer, opts), REQUEST_TIMEOUT_MS, 'read channel');
+  const all = await readChannelPosts(read, days);
   const settled = all.filter((p) => p.at < dayOld);
   if (settled.length < 10) throw new Error(`only ${settled.length} post(s) older than a day in the last ${days} days — try --days 30`);
   const { avg, line } = summarise(settled);

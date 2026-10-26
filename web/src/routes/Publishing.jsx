@@ -73,9 +73,13 @@ function ChannelPanel({ status, t }) {
                   {t('publishing.ch.thisHour', { posted: c.postedLastHour, limit: c.limitThisHour })}
                 </span>
                 {' · '}
-                {c.paceLike
-                  ? t('publishing.ch.paceLike', { channel: c.paceLike, max: c.maxPerHour })
-                  : t('publishing.ch.paceFixed', { max: c.maxPerHour })}
+                {c.pace === 'stats'
+                  ? c.planPerDay != null
+                    ? t('publishing.ch.paceStats', { perDay: c.planPerDay, max: c.maxPerHour })
+                    : t('publishing.ch.paceStatsPending', { avg: c.postsPerHour, max: c.maxPerHour })
+                  : c.paceLike
+                    ? t('publishing.ch.paceLike', { channel: c.paceLike, max: c.maxPerHour })
+                    : t('publishing.ch.paceFixed', { max: c.maxPerHour })}
                 {' · '}
                 {t('publishing.ch.gap', { minutes: c.minGapMinutes })}
               </div>

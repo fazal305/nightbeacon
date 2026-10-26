@@ -52,11 +52,11 @@ Target channels are configured in `server/channels/channels.json`:
 
 | Channel | Delivery | Limit | Notes |
 |---|---|---|---|
-| @r3syst | Bot (@Nightbeaconbot) posts high priority automatically | pace of Middle East Spectator, up to 20/hour | summaries at 09:00 and 21:00 · quiet hours 06:00–10:00 |
-| @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | pace of Middle East Spectator, up to 4/hour | quiet hours 02:00–07:00 |
+| @r3syst | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, paced by its own views, up to 3/hour | summaries at 09:00 and 21:00 · quiet hours 06:00–10:00 |
+| @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, paced by its own views, up to 2/hour | quiet hours 02:00–07:00 |
 | @GiviDpr, @RezistanceTrench1 | Drafts in the dashboard — Copy, then Mark as sent | 2/hour | unsent drafts expire after 6 hours |
 
-Each channel's settings (`maxPerHour`, `paceLike`, `exclusiveGroup`,
+Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `exclusiveGroup`,
 `notify`, `quietHours`, `digest`, `banners`) are in `channels.json`; the
 Publishing page shows them per channel, with posts this hour, posted in the
 last 24 h and repeats blocked.
@@ -86,9 +86,14 @@ last 24 h and repeats blocked.
   overlap plus the same figures) before it is queued and again before it is
   sent, so the same news isn't posted twice even when two reports weren't
   matched as one story.
-- **Pace like Middle East Spectator** — `"paceLike": "Middle_East_Spectator"`:
-  each hour's limit follows that channel's own posts per hour of the day
-  (last 14 days), up to `maxPerHour`. See it with `npm run sources:pattern`.
+- **Pace from the channel's own stats** — `"pace": "stats"`: every 6 hours
+  the server reads the channel's posts of the last 15 days (older than a day,
+  so views have settled) and works out the average views per post at each
+  hour of the day. Hours whose posts get seen more get more posts, hours
+  that don't get fewer (at least one per two hours), averaging
+  `postsPerHour` over the day and never above `maxPerHour`. Until the stats
+  are read, it posts `postsPerHour`. `npm run publish:check` shows the
+  plan per hour; `npm run stats:posts` shows the views behind it.
 - **Quiet delivery** — `"notify": "breaking"`: only headline posts (BREAKING,
   URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
   arrive silently; `"quietHours": "06:00-10:00"` makes every post silent in
@@ -195,7 +200,7 @@ In `server/`:
 | `npm run publish:drain` | Clears the queue of posts waiting to be drafted |
 | `npm run sources:list` | Lists monitored sources |
 | `npm run stats:posts` | What works on your channel: views/shares by hour, media, headline style, length; best and weakest posts |
-| `npm run sources:pattern` | A channel's posting pattern (default Middle East Spectator) |
+| `npm run sources:pattern -- @channel` | Another channel's posting pattern by hour (for `"paceLike"`) |
 | `npm run sources:discover` → `npm run sources:add` | Finds candidate channels (similar channels, folders, mentions), then adds the ones you keep |
 | `npm run sources:official` | Builds `official-sources.md` from a Telegram folder link |
 | `npm run seed:sources-bulk` | Adds every channel in chat-folder links (read-only) |

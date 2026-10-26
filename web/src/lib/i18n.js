@@ -56,6 +56,8 @@ const resources = {
         ch: {
           thisHour: '{{posted}}/{{limit}} posts this hour',
           paceLike: "pace follows @{{channel}} (max {{max}}/h)",
+          paceStats: 'pace from its own views: ~{{perDay}}/day, more when posts get seen (max {{max}}/h)',
+          paceStatsPending: '{{avg}}/h until its view stats are read (max {{max}}/h)',
           paceFixed: 'max {{max}}/h',
           gap: 'at least {{minutes}} min apart',
           activity: '{{today}} posted in 24h · {{blocked}} repeats blocked',
@@ -193,6 +195,8 @@ const resources = {
         ch: {
           thisHour: '{{posted}}/{{limit}} منشورات هذه الساعة',
           paceLike: 'الوتيرة تتبع @{{channel}} (حد أقصى {{max}}/ساعة)',
+          paceStats: 'الوتيرة حسب مشاهدات القناة: ~{{perDay}} يومياً، أكثر في ساعات المشاهدة (حد أقصى {{max}}/ساعة)',
+          paceStatsPending: '{{avg}}/ساعة حتى تُقرأ إحصاءات المشاهدات (حد أقصى {{max}}/ساعة)',
           paceFixed: 'حد أقصى {{max}}/ساعة',
           gap: 'بفاصل {{minutes}} دقيقة على الأقل',
           activity: '{{today}} منشور خلال 24 ساعة · {{blocked}} تكرار تم منعه',

@@ -45,6 +45,12 @@ import path from 'node:path';
 //                    (e.g. "bots"): a story one of them used is not picked
 //                    for the others, and a finished post is checked against
 //                    what they all posted recently (sameNews.js)
+//   pace             "stats": the channel's own views by hour of posting
+//                    decide how many posts each hour gets — postsPerHour on
+//                    average over the day, more at hours its posts are seen,
+//                    fewer at hours they aren't, never above maxPerHour (pace.js)
+//   postsPerHour     average posts per hour for "pace": "stats" (default
+//                    maxPerHour)
 //   paceLike         a monitored channel's @username: its posts per hour of
 //                    the day (last 14 days) become this channel's hourly
 //                    limits, with maxPerHour as the ceiling (pace.js)
@@ -147,6 +153,9 @@ export function normalizeChannels(rawChannels, defaults) {
       digest: normalizeDigest(c.digest, key),
       // Channels with the same exclusiveGroup never post the same story.
       exclusiveGroup: c.exclusiveGroup ? String(c.exclusiveGroup) : null,
+      // Hourly limits from the channel's own views by hour (pace.js).
+      pace: c.pace === 'stats' ? 'stats' : null,
+      postsPerHour: Number(c.postsPerHour ?? c.maxPerHour ?? defaults.maxPerHour),
       // Copy another channel's hourly posting pattern (pace.js).
       paceLike: c.paceLike ? String(c.paceLike).replace(/^@/, '') : null,
       // "breaking": only headline posts notify subscribers (sender.js isSilent).
