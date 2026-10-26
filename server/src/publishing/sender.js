@@ -8,7 +8,7 @@ import { applyBanners, isHeadlinePost } from './banners.js';
 import { localHour } from './pace.js';
 import { applyWatermark } from './watermark.js';
 import { findRepeat } from './sameNews.js';
-import { hideEmoji } from './prompt.js';
+import { hideEmoji, applyChannelFormat } from './prompt.js';
 import { limitsFor, refreshPaces } from './pace.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
@@ -200,7 +200,10 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   try {
     const { media, note } = await mediaFor(pub, channel, loadMedia, config);
     const silent = isSilent(pub, channel, config);
-    const sent = await send(hideEmoji(pub.final_text, channel.hideEmoji), channel, config, media, { silent });
+    // Format again at send time (sign-off, hashtags, hidden emoji), so posts
+    // drafted before a channel's settings changed still come out right.
+    const text = hideEmoji(pub.kind === 'post' || pub.kind === 'digest' ? applyChannelFormat(pub.final_text, channel) : pub.final_text, channel.hideEmoji);
+    const sent = await send(text, channel, config, media, { silent });
     const mediaCount = sent.mediaCount ?? media.length;
     const mediaNote = sent.mediaError ? `Posted as text only: Telegram refused the media (${sent.mediaError})` : note;
     await pool.query(

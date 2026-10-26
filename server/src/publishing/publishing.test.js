@@ -144,6 +144,10 @@ test('channel format: no CAPITALS headline, hashtags after the sign-off', async 
     '🔴 Story text.\n\n@WarCabinet\n#Iran #Iraq',
     'a sign-off line before the hashtags is not kept twice'
   );
+  const posted = '🟢 🇮🇷 The speaker said savings will go to essential needs.\n\n✨ @WarCabinet\n\n@WarCabinet\n#Iran';
+  const fixed = applyChannelFormat(posted, ch);
+  assert.equal(fixed, '🟢 🇮🇷 The speaker said savings will go to essential needs.\n\n@WarCabinet\n#Iran', 'a post drafted by older code is fixed at send time');
+  assert.equal(applyChannelFormat(fixed, ch), fixed, 'formatting twice changes nothing');
   const { hideEmoji } = await import('./prompt.js');
   assert.equal(hideEmoji('🔴 🇮🇷 Story text.\n\n@WarCabinet', ['🔴', '🟡', '🟢']), '🇮🇷 Story text.\n\n@WarCabinet');
   assert.equal(hideEmoji('🟢 🇪🇬 🇸🇦 Talks.', ['🔴', '🟡', '🟢']), '🇪🇬 🇸🇦 Talks.');
