@@ -54,6 +54,14 @@ import path from 'node:path';
 //   surge            { "maxPerHour": 6 }: in big-event mode (surge.js — a
 //                    burst of high-priority news, or switched on from the
 //                    Publishing page) the channel may post that many an hour
+//   trustSources     ["@username", "Display Name", …]: reports from these
+//                    sources score 1.5× for this channel. "@name" matches the
+//                    username exactly; other entries match any source whose
+//                    display name contains them (any case)
+//   blockSources     same format: reports from these sources are never
+//                    drafted for this channel
+//   timeZone         this channel's time zone for summary times, quiet hours
+//                    and its hourly pace (default PUBLISH_TIMEZONE)
 //   paceLike         a monitored channel's @username: its posts per hour of
 //                    the day (last 14 days) become this channel's hourly
 //                    limits, with maxPerHour as the ceiling (pace.js)
@@ -64,6 +72,31 @@ import path from 'node:path';
 //   enabled          false to pause a channel
 // Without a channels file, PUBLISH_CHANNEL (+ TELEGRAM_BOT_TOKEN) defines a
 // single bot channel, so the simple setup needs no file at all.
+
+// ["@user", "Some Name"] -> { usernames: ['user'], names: ['%some name%'] }
+// (for SQL = ANY / LIKE ANY).
+export function sourceList(entries) {
+  const out = { usernames: [], names: [] };
+  for (const e of Array.isArray(entries) ? entries : []) {
+    const v = String(e || '').trim().toLowerCase();
+    if (!v) continue;
+    if (v.startsWith('@')) out.usernames.push(v.slice(1));
+    else out.names.push(`%${v.replace(/[\\%_]/g, (m) => `\\${m}`)}%`);
+  }
+  return out;
+}
+
+function validTimeZone(tz, key) {
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz });
+    return tz;
+  } catch {
+    throw new Error(`publish channel "${key}": unknown timeZone "${tz}" (use e.g. "Europe/London")`);
+  }
+}
+
+// A channel's own time zone, or the global one.
+export const tzOf = (channel, config) => channel?.timeZone || config.timeZone;
 
 function list(value, fallback) {
   const raw = value ?? fallback;
@@ -158,6 +191,9 @@ export function normalizeChannels(rawChannels, defaults) {
       exclusiveGroup: c.exclusiveGroup ? String(c.exclusiveGroup) : null,
       // Hourly limits from the channel's own views by hour (pace.js).
       pace: c.pace === 'stats' ? 'stats' : null,
+      trustSources: sourceList(c.trustSources),
+      blockSources: sourceList(c.blockSources),
+      timeZone: c.timeZone ? validTimeZone(String(c.timeZone), key) : null,
       surgeMaxPerHour: c.surge?.maxPerHour ? Number(c.surge.maxPerHour) : null,
       postsPerHour: Number(c.postsPerHour ?? c.maxPerHour ?? defaults.maxPerHour),
       // Copy another channel's hourly posting pattern (pace.js).

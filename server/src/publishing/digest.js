@@ -1,6 +1,6 @@
 import { pool } from '../db/pool.js';
 import { callLLM } from '../processing/llmClient.js';
-import { publishConfig } from './config.js';
+import { publishConfig, tzOf } from './config.js';
 import { getStyleContext } from './style.js';
 import { buildDigestMessages, parseDraft, applyTerminology, removeBannedFlags } from './prompt.js';
 
@@ -90,7 +90,7 @@ export async function runDigestTick({ llm = callLLM, styleFn = getStyleContext, 
   if (config.mode === 'off') return [];
   const results = [];
   for (const channel of config.channels.filter((c) => c.digest)) {
-    const { current, previous } = digestSlots(channel.digest.times, config.timeZone, now);
+    const { current, previous } = digestSlots(channel.digest.times, tzOf(channel, config), now);
     if (now - current > LATE_LIMIT_MS) continue;
     const { rows: done } = await pool.query(
       `SELECT 1 FROM publications WHERE kind = 'digest' AND channel_key = $1 AND digest_slot = $2`,
@@ -109,7 +109,7 @@ export async function runDigestTick({ llm = callLLM, styleFn = getStyleContext, 
     try {
       const style = await styleFn(channel);
       const { content, model } = await llm(
-        buildDigestMessages({ channel, style, stories, since: previous, timeZone: config.timeZone,
+        buildDigestMessages({ channel, style, stories, since: previous, timeZone: tzOf(channel, config),
           terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules, bannedEmoji: config.bannedEmoji }),
         { providerName: config.draftProvider, model: config.draftModel || undefined, temperature: 0.3 }
       );

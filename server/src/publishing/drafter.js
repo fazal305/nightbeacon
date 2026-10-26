@@ -71,6 +71,8 @@ export async function expireStaleRequests(config) {
 //           a statement is published once, by one channel, so it would
 //           otherwise never win on corroboration
 //         × freshness (halves every hour)
+//         × 1.5 if the channel trusts the source ("trustSources")
+// Reports from a channel's "blockSources" are never picked for it.
 //
 // A story waits settleMinutes before it can be picked (unless 3+ channels
 // already report it), so corroboration has time to show. A story already
@@ -116,7 +118,9 @@ async function queueAutomaticDrafts(config) {
 
     const { rowCount } = await pool.query(
       `WITH candidate AS (
-         SELECT ri.id, ri.story_id, ri.priority, ${SCORE_SQL} AS score,
+         SELECT ri.id, ri.story_id, ri.priority,
+                ${SCORE_SQL} * (CASE WHEN lower(src.channel_username) = ANY($8::text[])
+                                       OR lower(src.display_name) LIKE ANY($9::text[]) THEN 1.5 ELSE 1 END) AS score,
                 coalesce(st.item_count, 1) AS reports, ri.dedup_status,
                 lower(src.channel_username) = ANY($5::text[]) AS official,
                 $6::boolean AND ${HAS_MEDIA_SQL} AS with_media,
@@ -127,6 +131,7 @@ async function queueAutomaticDrafts(config) {
          WHERE ri.status = 'ready'
            AND ri.dedup_status IN ('unique', 'update')
            AND ri.priority = ANY($1)
+           AND NOT (lower(src.channel_username) = ANY($10::text[]) OR lower(src.display_name) LIKE ANY($11::text[]))
            AND ri.telegram_date >= now() - make_interval(mins => $2)
            AND (ri.telegram_date <= now() - make_interval(mins => $4) OR coalesce(st.item_count, 1) >= 3)
            AND NOT EXISTS (SELECT 1 FROM publications p WHERE p.raw_item_id = ri.id AND p.channel_key = $3)
@@ -150,7 +155,8 @@ async function queueAutomaticDrafts(config) {
                 || CASE WHEN with_media THEN ' · photo/video' ELSE '' END || ' · ' || age_min || ' min old'
        FROM candidate
        ON CONFLICT (raw_item_id, channel_key) DO NOTHING`,
-      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()], channel.media, others]
+      [priorities, config.maxAgeMinutes, channel.key, channel.settleMinutes, [...config.officialSources.keys()], channel.media, others,
+       channel.trustSources.usernames, channel.trustSources.names, channel.blockSources.usernames, channel.blockSources.names]
     );
     queued += rowCount;
   }

@@ -1,7 +1,7 @@
 import { pool } from '../db/pool.js';
 import { RateGate } from '../pipeline/rateGate.js';
 import { floodWaitSeconds, isTelegramAnswer } from '../ingestion/telegramClient.js';
-import { publishConfig, channelByKey } from './config.js';
+import { publishConfig, channelByKey, tzOf } from './config.js';
 import { sendToChannel, resetBotClient } from './botClient.js';
 import { loadItemMedia, loadBestMedia } from './media.js';
 import { applyBanners, isHeadlinePost } from './banners.js';
@@ -95,7 +95,7 @@ async function sourceMedia(pub, channel, loadMedia, config) {
 export function isSilent(pub, channel, config, now = new Date()) {
   if (channel.quietHours) {
     const [from, to] = channel.quietHours.split('-').map((t) => Number(t.split(':')[0]));
-    const h = localHour(now, config.timeZone);
+    const h = localHour(now, tzOf(channel, config));
     if (from <= to ? h >= from && h < to : h >= from || h < to) return true;
   }
   if (channel.notify !== 'breaking') return false;

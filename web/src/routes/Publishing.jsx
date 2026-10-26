@@ -147,7 +147,7 @@ function ChannelPanel({ status, t }) {
                   <>
                     {' · '}
                     <span className={c.silentNow ? 'text-accent' : ''}>
-                      {t(c.silentNow ? 'publishing.ch.quietNow' : 'publishing.ch.quiet', { hours: c.quietHours, zone: status.timeZone })}
+                      {t(c.silentNow ? 'publishing.ch.quietNow' : 'publishing.ch.quiet', { hours: c.quietHours, zone: c.timeZone || status.timeZone })}
                     </span>
                   </>
                 )}
@@ -156,7 +156,7 @@ function ChannelPanel({ status, t }) {
             <div className="flex flex-wrap gap-1">
               {chip(c.banners, t('publishing.ch.banners'))}
               {chip(c.watermark, t('publishing.ch.watermark'))}
-              {chip(c.digestTimes.length > 0, c.digestTimes.length ? t('publishing.ch.digest', { times: c.digestTimes.join(', ') }) : t('publishing.ch.noDigest'))}
+              {chip(c.digestTimes.length > 0, c.digestTimes.length ? t('publishing.ch.digest', { times: c.digestTimes.join(', ') + (c.timeZone && c.timeZone !== status.timeZone ? ` (${c.timeZone})` : '') }) : t('publishing.ch.noDigest'))}
             </div>
             {c.exclusiveWith.length > 0 && <div>{t('publishing.ch.exclusive', { channels: c.exclusiveWith.join(', ') })}</div>}
           </div>

@@ -1,6 +1,7 @@
 import { pool } from '../db/pool.js';
 import { getState, setState } from '../db/appState.js';
 import { refreshSurge, surgeActive } from './surge.js';
+import { tzOf } from './config.js';
 
 // Posting pace copied from another channel ("paceLike": "@some_channel"
 // in channels.json): that channel's own posts per hour of the day (local
@@ -147,7 +148,7 @@ async function refreshOwnPace(channel, config, { fetch, fetchPosts }) {
   entry.triedAt = now;
   try {
     const posts = await fetchPosts(channel);
-    entry.stats = { at: now, week: true, posts: posts.length, hours: hourlyViews(posts, config.timeZone) };
+    entry.stats = { at: now, week: true, posts: posts.length, hours: hourlyViews(posts, tzOf(channel, config)) };
     await setState(`pace:${channel.key}`, JSON.stringify(entry.stats));
   } catch (err) {
     console.warn(`[publishing] could not read ${channel.telegram}'s stats for its pace: ${err.message}`);
@@ -189,13 +190,13 @@ export function limitsFor(channel, config, date = new Date()) {
 function baseLimits(channel, config, date) {
   if (channel.pace === 'stats') {
     const plan = ownPace(channel);
-    return fromRate(plan ? plan.rates[localHour(date, config.timeZone)] : channel.postsPerHour);
+    return fromRate(plan ? plan.rates[localHour(date, tzOf(channel, config))] : channel.postsPerHour);
   }
   const own = { maxPerHour: channel.maxPerHour, minGapMinutes: channel.minGapMinutes };
   if (!channel.paceLike) return own;
   const p = profiles.get(String(channel.paceLike).replace(/^@/, '').toLowerCase());
   if (!p || p.days < 3) return own;
-  const per = p.hours[localHour(date, config.timeZone)];
+  const per = p.hours[localHour(date, tzOf(channel, config))];
   const maxPerHour = Math.max(1, Math.min(channel.maxPerHour, Math.round(per)));
   return { maxPerHour, minGapMinutes: Math.min(30, 30 / maxPerHour) };
 }

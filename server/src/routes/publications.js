@@ -141,6 +141,7 @@ publicationsRouter.get('/status', h(async (req, res) => {
           : [],
         notify: c.notify,
         quietHours: c.quietHours,
+        timeZone: c.timeZone || config.timeZone,
         silentNow: isSilent({ kind: 'post', final_text: '' }, { ...c, notify: 'all' }, config),
         banners: Boolean(c.banners),
         watermark: Boolean(c.banners?.watermark),

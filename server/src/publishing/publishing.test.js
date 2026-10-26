@@ -226,6 +226,33 @@ test('selection: best score wins (priority × corroboration × freshness), one s
   assert.equal(await pubFor(another), undefined, '3 per hour reached');
 });
 
+test('selection: blocked sources are never drafted for the channel; trusted ones score 1.5×', async () => {
+  const username = (await pool.query('SELECT channel_username FROM sources WHERE id = $1', [sourceId])).rows[0].channel_username;
+  setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0, blockSources: ['src'] }]);
+  const blocked = await readyItem({ minutesAgo: 5 });
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  assert.equal(await pubFor(blocked), undefined, 'source whose display name contains "Src" is blocked');
+  setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0, blockSources: ['@someone_else'], trustSources: [`@${username}`] }]);
+  const trusted = await readyItem({ minutesAgo: 5 });
+  await runDraftingTick({ llm: fakeLLM(() => 'Post.'), styleFn: style });
+  const pub = await pubFor(trusted);
+  assert.ok(pub, 'drafted once the block no longer matches');
+  assert.ok(pub.score > 13, `score ${pub.score} includes the trusted-source bonus`);
+});
+
+test('channel time zone: quiet hours and summaries use the channel\'s own zone', async () => {
+  const { publishConfig, tzOf } = await import('./config.js');
+  setChannels([{ ...MAIN, timeZone: 'Europe/London', quietHours: '00:00-06:00' }]);
+  const config = publishConfig();
+  const ch = config.channels[0];
+  assert.equal(tzOf(ch, config), 'Europe/London');
+  const { isSilent } = await import('./sender.js');
+  // 02:00 in London (winter, UTC+0) is quiet; 02:00 UTC = 07:00 in Karachi would not be.
+  assert.equal(isSilent({ kind: 'post', final_text: 'x' }, ch, { ...config, timeZone: 'Asia/Karachi' }, new Date('2026-01-10T02:00:00Z')), true);
+  setChannels([{ ...MAIN, timeZone: 'Mars/Base' }]);
+  assert.throws(() => publishConfig(), /unknown timeZone/);
+});
+
 test('selection: a report from an official channel scores double', async () => {
   const officialFile = path.join(path.dirname(channelsFile), 'official-sources.md');
   const username = (await pool.query('SELECT channel_username FROM sources WHERE id = $1', [sourceId])).rows[0].channel_username;
