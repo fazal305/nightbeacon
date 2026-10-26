@@ -52,8 +52,8 @@ Target channels are configured in `server/channels/channels.json`:
 
 | Channel | Delivery | Limit | Notes |
 |---|---|---|---|
-| @r3syst | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, paced by its own views, up to 3/hour | summaries at 09:00 and 21:00 · quiet hours 06:00–10:00 |
-| @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, paced by its own views, up to 2/hour | quiet hours 02:00–07:00 |
+| @r3syst | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, re-paced weekly from last week's views, up to 3/hour | summaries at 09:00 and 21:00 · quiet hours 06:00–10:00 |
+| @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, re-paced weekly from last week's views, up to 2/hour | quiet hours 02:00–07:00 |
 | @GiviDpr, @RezistanceTrench1 | Drafts in the dashboard — Copy, then Mark as sent | 2/hour | unsent drafts expire after 6 hours |
 
 Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `exclusiveGroup`,
@@ -86,15 +86,21 @@ last 24 h and repeats blocked.
   overlap plus the same figures) before it is queued and again before it is
   sent, so the same news isn't posted twice even when two reports weren't
   matched as one story.
-- **Pace from the channel's own stats** — `"pace": "stats"`: once a week
-  the server reads the channel's posts of the previous week (1–8 days old,
-  so views have settled) and works out the average views per post at each
-  hour of the day. Hours whose posts get seen more get more posts, hours
-  that don't get fewer (at least one per two hours), averaging
-  `postsPerHour` over the day and never above `maxPerHour`. Until the stats
-  are read, it posts `postsPerHour`. The week's plan survives restarts.
-  `npm run publish:check` shows the
-  plan per hour; `npm run stats:posts` shows the views behind it.
+- **Weekly pace from the channel's own stats** — `"pace": "stats"`: once a
+  week (and when the server starts without a plan) the server reads the
+  channel's posts of the previous week, 1–8 days old so their views have
+  settled, and works out the average views per post for each hour of the
+  day. That becomes the plan for the coming week:
+  - hours whose posts were seen more get more posts, hours that weren't get
+    fewer, but never less than one post per two hours;
+  - the day averages `postsPerHour` (1 for both bot channels) and no hour
+    goes above `maxPerHour` (R3SYST 3, RMN 2);
+  - hours with few posts last week lean towards the average;
+  - until the first plan is read, the channel posts `postsPerHour`.
+
+  The plan is saved in the database, so restarts don't reset it.
+  `npm run publish:check` shows the plan per hour and the day it was read;
+  `npm run stats:posts` shows the views behind it.
 - **Quiet delivery** — `"notify": "breaking"`: only headline posts (BREAKING,
   URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
   arrive silently; `"quietHours": "06:00-10:00"` makes every post silent in
@@ -190,7 +196,7 @@ In `server/`:
 
 | Command | What it does |
 |---|---|
-| `npm run publish:check` | Posting status: config, queue, pace, next post time, bot admin rights |
+| `npm run publish:check` | Posting status: config, queue, this week's pace plan per hour (and when it was read), next post time, bot admin rights |
 | `npm run publish:test-banner` | Sends one test post with a banner to check banners and bot rights |
 | `npm run ingest:check` | Why ingestion is failing: latest runs, their errors, recent poll successes |
 | `npm run telegram:login` | Logs the Telegram account in again; paste the printed session into `server/.env` |
