@@ -8,6 +8,7 @@ import { applyBanners, isHeadlinePost } from './banners.js';
 import { localHour } from './pace.js';
 import { applyWatermark } from './watermark.js';
 import { findRepeat } from './sameNews.js';
+import { hideEmoji } from './prompt.js';
 import { limitsFor, refreshPaces } from './pace.js';
 
 // Sends approved posts for "bot" channels, strictly one at a time and never
@@ -199,7 +200,7 @@ export async function runPublishingTick({ send = sendToChannel, loadMedia = load
   try {
     const { media, note } = await mediaFor(pub, channel, loadMedia, config);
     const silent = isSilent(pub, channel, config);
-    const sent = await send(pub.final_text, channel, config, media, { silent });
+    const sent = await send(hideEmoji(pub.final_text, channel.hideEmoji), channel, config, media, { silent });
     const mediaCount = sent.mediaCount ?? media.length;
     const mediaNote = sent.mediaError ? `Posted as text only: Telegram refused the media (${sent.mediaError})` : note;
     await pool.query(

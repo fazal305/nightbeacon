@@ -139,6 +139,14 @@ test('channel format: no CAPITALS headline, hashtags after the sign-off', async 
   assert.equal(applyChannelFormat('🔴 BREAKING: Talks are over.\n✨ @WarCabinet', ch), '🔴 BREAKING: Talks are over.\n\n@WarCabinet', 'mixed-case first line stays');
   assert.equal(applyChannelFormat('🔴 ONLY A HEADLINE HERE', ch), '🔴 ONLY A HEADLINE HERE\n\n@WarCabinet', 'nothing to fall back on: kept');
   assert.equal(applyChannelFormat('🔴 HEADLINE IN CAPS\nBody. #Iran', {}), '🔴 HEADLINE IN CAPS\nBody. #Iran', 'other channels unchanged');
+  assert.equal(
+    applyChannelFormat('🔴 Story text.\n\n✨ @WarCabinet\n#Iran #Iraq', ch),
+    '🔴 Story text.\n\n@WarCabinet\n#Iran #Iraq',
+    'a sign-off line before the hashtags is not kept twice'
+  );
+  const { hideEmoji } = await import('./prompt.js');
+  assert.equal(hideEmoji('🔴 🇮🇷 Story text.\n\n@WarCabinet', ['🔴', '🟡', '🟢']), '🇮🇷 Story text.\n\n@WarCabinet');
+  assert.equal(hideEmoji('🟢 🇪🇬 🇸🇦 Talks.', ['🔴', '🟡', '🟢']), '🇪🇬 🇸🇦 Talks.');
 });
 
 test('official channels: statements only from the organisation\'s own channel; the model is told the source type', () => {

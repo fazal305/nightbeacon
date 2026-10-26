@@ -91,7 +91,12 @@ export function removeBannedFlags(text, banned = []) {
 export function applySignoff(text, signoff) {
   if (!text || !signoff) return text;
   const handle = (signoff.match(/@[\w]+/) || [signoff.trim()])[0].toLowerCase();
-  const lines = text.replace(/\s+$/, '').split('\n');
+  // A line that is only the handle with emoji/symbols ("✨ @WarCabinet") goes
+  // wherever it is (the model sometimes puts hashtags after it).
+  const lines = text
+    .replace(/\s+$/, '')
+    .split('\n')
+    .filter((l) => l.replace(/[^\p{L}\p{N}@_]/gu, '').toLowerCase() !== handle);
   while (lines.length && (!lines[lines.length - 1].trim() || lines[lines.length - 1].toLowerCase().includes(handle))) lines.pop();
   return `${lines.join('\n').replace(/\s+$/, '')}\n\n${signoff}`;
 }
@@ -140,6 +145,17 @@ export function hashtagsAtEnd(text, signoff) {
   const body = keep.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
   if (!tags.length) return body;
   return `${body}${signoff ? '\n' : '\n\n'}${tags.map((t) => `#${t}`).join(' ')}`;
+}
+
+// Emoji a channel never shows ("hideEmoji"), removed when the post is sent:
+// e.g. 🔴/🟡/🟢 urgency marks the bot uses to spot breaking news but the
+// channel doesn't want in its posts.
+export function hideEmoji(text, emoji = []) {
+  if (!text || !emoji?.length) return text;
+  return emoji
+    .reduce((out, e) => out.split(e).join(''), text)
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/^[ \t]+/gm, '');
 }
 
 // Per-channel finishing of a draft or summary: headline, sign-off, hashtags.
