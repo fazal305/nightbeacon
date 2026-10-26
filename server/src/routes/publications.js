@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { publishConfig, channelByKey } from '../publishing/config.js';
 import { publishGate, publishingStats, isSilent } from '../publishing/sender.js';
-import { limitsFor, refreshPaces, ownPace } from '../publishing/pace.js';
+import { limitsFor, refreshPaces, ownPace, nextPostTime } from '../publishing/pace.js';
 import { surgeActive, setSurge } from '../publishing/surge.js';
 import { loadBestMedia } from '../publishing/media.js';
 import { describeError } from '../db/describeError.js';
@@ -111,6 +111,15 @@ publicationsRouter.get('/status', h(async (req, res) => {
      FROM publications GROUP BY channel_key`
   );
   // The server's workers read the stats; the page only shows what they saved.
+  // Bot channels: this hour's automatic-limit posts and the queue, for the
+  // next post time.
+  const { rows: hour } = await pool.query(
+    `SELECT channel_key, array_agg(published_at ORDER BY published_at) AS times FROM publications
+     WHERE status = 'published' AND published_at > now() - interval '1 hour' GROUP BY channel_key`
+  );
+  const { rows: queued } = await pool.query(
+    `SELECT channel_key, count(*)::int AS n FROM publications WHERE status IN ('approved', 'sending') GROUP BY channel_key`
+  );
   await refreshPaces(config, { fetch: false }).catch(() => {});
   const gate = publishGate(config);
   res.json({
@@ -131,6 +140,8 @@ publicationsRouter.get('/status', h(async (req, res) => {
         limitThisHour: limit.maxPerHour,
         minGapMinutes: Math.round(limit.minGapMinutes * 10) / 10,
         surgeMaxPerHour: c.surgeMaxPerHour,
+        nextPostAt: c.delivery === 'bot' ? nextPostTime(hour.find((r) => r.channel_key === c.key)?.times || [], limit).toISOString() : null,
+        queued: queued.find((r) => r.channel_key === c.key)?.n || 0,
         paceLike: c.pace ? null : c.paceLike,
         pace: c.pace,
         postsPerHour: c.postsPerHour,

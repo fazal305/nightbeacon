@@ -55,6 +55,9 @@ const resources = {
         lastError: 'Last send error: {{error}}',
         ch: {
           thisHour: '{{posted}}/{{limit}} posts this hour',
+          nextAt: '⏱ next automatic post at {{time}} ({{queued}} queued)',
+          nextNow: '⏱ next automatic post: now ({{queued}} queued)',
+          nextWaiting: '⏱ can post now — waiting for the next story to be drafted',
           paceLike: "pace follows @{{channel}} (max {{max}}/h)",
           paceStats: 'pace from its own views: ~{{perDay}}/day, more when posts get seen (max {{max}}/h)',
           paceStatsPending: '{{avg}}/h until its view stats are read (max {{max}}/h)',
@@ -201,6 +204,9 @@ const resources = {
         lastError: 'آخر خطأ في الإرسال: {{error}}',
         ch: {
           thisHour: '{{posted}}/{{limit}} منشورات هذه الساعة',
+          nextAt: '⏱ المنشور التلقائي التالي في {{time}} ({{queued}} في الانتظار)',
+          nextNow: '⏱ المنشور التلقائي التالي: الآن ({{queued}} في الانتظار)',
+          nextWaiting: '⏱ يمكن النشر الآن — بانتظار صياغة الخبر التالي',
           paceLike: 'الوتيرة تتبع @{{channel}} (حد أقصى {{max}}/ساعة)',
           paceStats: 'الوتيرة حسب مشاهدات القناة: ~{{perDay}} يومياً، أكثر في ساعات المشاهدة (حد أقصى {{max}}/ساعة)',
           paceStatsPending: '{{avg}}/ساعة حتى تُقرأ إحصاءات المشاهدات (حد أقصى {{max}}/ساعة)',

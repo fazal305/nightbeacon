@@ -174,6 +174,17 @@ export function ownPace(channel) {
 
 const fromRate = (rate) => ({ maxPerHour: Math.max(1, Math.ceil(rate)), minGapMinutes: Math.round(60 / rate) });
 
+// When the channel may next post automatically: at least minGapMinutes
+// after its last post, and once fewer than maxPerHour posts remain in the
+// last hour. `posted` = this hour's publish times, oldest first.
+export function nextPostTime(posted, { maxPerHour, minGapMinutes }, now = Date.now()) {
+  const times = posted.map((t) => new Date(t).getTime()).sort((a, b) => a - b);
+  let next = now;
+  if (times.length) next = Math.max(next, times[times.length - 1] + minGapMinutes * 60_000);
+  if (times.length >= maxPerHour) next = Math.max(next, times[times.length - maxPerHour] + 3600_000);
+  return new Date(next);
+}
+
 // { maxPerHour, minGapMinutes } for the channel at `date`; in big-event mode
 // (surge.js) a channel with surgeMaxPerHour gets at least that many.
 export function limitsFor(channel, config, date = new Date()) {

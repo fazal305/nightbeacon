@@ -11,6 +11,11 @@ import PriorityBadge, { CategoryBadge } from '../components/PriorityBadge';
 // Statuses: see db/migrations/007_publications.sql.
 const GROUPS = ['drafts', 'queue', 'published', 'closed'];
 
+// Next-post times are shown in Pakistan time, whatever the browser's zone.
+function pkTime(iso) {
+  return `${new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'Asia/Karachi', hour: '2-digit', minute: '2-digit' })} PKT`;
+}
+
 function when(iso) {
   return iso ? new Date(iso).toLocaleString() : '—';
 }
@@ -33,8 +38,6 @@ function StatusBar({ status, t }) {
             {(status.channels || []).map((c) => `${c.name} (${t(`publishing.delivery.${c.delivery}`)})`).join(', ') || '—'}
           </span>
         </span>
-        <span>{t('publishing.pace', { seconds: status.minIntervalSeconds })}</span>
-        <span>{t('publishing.lastSent', { time: when(status.lastSentAt) })}</span>
         {status.pausedUntil && (
           <span className="text-priority-high">{t('publishing.paused', { time: when(status.pausedUntil) })}</span>
         )}
@@ -134,6 +137,15 @@ function ChannelPanel({ status, t }) {
                     : t('publishing.ch.paceFixed', { max: c.maxPerHour })}
                 {' · '}
                 {t('publishing.ch.gap', { minutes: c.minGapMinutes })}
+              </div>
+            )}
+            {bot && c.nextPostAt && (
+              <div className="text-text">
+                {new Date(c.nextPostAt).getTime() <= Date.now() + 30_000
+                  ? c.queued > 0
+                    ? t('publishing.ch.nextNow', { queued: c.queued })
+                    : t('publishing.ch.nextWaiting')
+                  : t('publishing.ch.nextAt', { time: pkTime(c.nextPostAt), queued: c.queued })}
               </div>
             )}
             <div>

@@ -2,7 +2,7 @@ import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { pool } from '../db/pool.js';
 import { isSameNews, similarity } from './sameNews.js';
-import { limitsFor, _setPaceProfileForTests, _setOwnStatsForTests, localHour, paceRates, hourlyViews } from './pace.js';
+import { limitsFor, _setPaceProfileForTests, _setOwnStatsForTests, localHour, paceRates, hourlyViews, nextPostTime } from './pace.js';
 
 after(() => pool.end());
 
@@ -55,6 +55,15 @@ test('pace from own stats: more posts at hours with more views, the day averages
 
   const v = hourlyViews([{ at: now.getTime(), views: 100 }, { at: now.getTime(), views: 300 }], tz);
   assert.deepEqual(v[h], { n: 2, views: 200 });
+});
+
+test('next post time: the gap after the last post, and the hourly limit', () => {
+  const now = Date.parse('2026-10-26T12:00:00Z');
+  const ago = (m) => new Date(now - m * 60_000).toISOString();
+  assert.equal(nextPostTime([], { maxPerHour: 2, minGapMinutes: 30 }, now).getTime(), now, 'nothing posted: now');
+  assert.equal(nextPostTime([ago(10)], { maxPerHour: 2, minGapMinutes: 30 }, now).getTime(), now + 20 * 60_000, 'gap');
+  // Two posts this hour with a limit of 2: next when the older one is an hour old.
+  assert.equal(nextPostTime([ago(50), ago(40)], { maxPerHour: 2, minGapMinutes: 5 }, now).getTime(), now + 10 * 60_000, 'limit');
 });
 
 test('silent delivery: only headline posts ring with notify "breaking"; everything is silent in quiet hours', async () => {
