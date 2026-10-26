@@ -45,6 +45,58 @@ function StatusBar({ status, t }) {
   );
 }
 
+// Big-event mode: bot channels post faster for a while — on by itself when a
+// burst of high-priority news comes in, or switched on/off here.
+function SurgeBar({ status, t }) {
+  const queryClient = useQueryClient();
+  const toggle = useMutation({
+    mutationFn: (hours) => api.setSurge(hours),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['publications', 'status'] }),
+  });
+  const surge = status?.surge;
+  if (!surge) return null;
+  const on = !surge.off;
+  const limits = (status.channels || [])
+    .filter((c) => c.surgeMaxPerHour)
+    .map((c) => `${c.name} ${c.surgeMaxPerHour}/h`)
+    .join(', ');
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2 text-xs ${
+        on ? 'bg-priority-high/10 text-priority-high' : 'bg-panel text-text-muted'
+      }`}
+    >
+      <span className={on ? 'font-semibold' : ''}>
+        {on
+          ? t('publishing.surge.on', { time: new Date(surge.until).toLocaleTimeString(), reason: surge.reason })
+          : t('publishing.surge.off')}
+      </span>
+      <span>{t('publishing.surge.limits', { limits })}</span>
+      <span className="ml-auto flex gap-2">
+        {on ? (
+          <button
+            type="button"
+            disabled={toggle.isPending}
+            onClick={() => toggle.mutate(0)}
+            className="rounded border border-border px-2 py-0.5 text-text hover:bg-bg"
+          >
+            {t('publishing.surge.stop')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={toggle.isPending}
+            onClick={() => toggle.mutate(3)}
+            className="rounded border border-priority-high/60 px-2 py-0.5 text-priority-high hover:bg-bg"
+          >
+            {t('publishing.surge.start')}
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
 // One card per channel: how it posts right now — this hour's limit (and the
 // channel whose pattern sets it), activity, notification rules, banners,
 // watermark, which channels it never repeats a story with.
@@ -333,6 +385,7 @@ export default function Publishing() {
         <h1 className="font-mono text-base text-text">{t('nav.publishing')}</h1>
       </div>
       <StatusBar status={status.data} t={t} />
+      <SurgeBar status={status.data} t={t} />
       <ChannelPanel status={status.data} t={t} />
       <div className="flex flex-wrap gap-2 border-b border-border bg-panel px-4 py-2">
         {GROUPS.map((g) => (

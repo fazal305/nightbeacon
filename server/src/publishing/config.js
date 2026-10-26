@@ -51,6 +51,9 @@ import path from 'node:path';
 //                    fewer at hours they aren't, never above maxPerHour (pace.js)
 //   postsPerHour     average posts per hour for "pace": "stats" (default
 //                    maxPerHour)
+//   surge            { "maxPerHour": 6 }: in big-event mode (surge.js — a
+//                    burst of high-priority news, or switched on from the
+//                    Publishing page) the channel may post that many an hour
 //   paceLike         a monitored channel's @username: its posts per hour of
 //                    the day (last 14 days) become this channel's hourly
 //                    limits, with maxPerHour as the ceiling (pace.js)
@@ -155,6 +158,7 @@ export function normalizeChannels(rawChannels, defaults) {
       exclusiveGroup: c.exclusiveGroup ? String(c.exclusiveGroup) : null,
       // Hourly limits from the channel's own views by hour (pace.js).
       pace: c.pace === 'stats' ? 'stats' : null,
+      surgeMaxPerHour: c.surge?.maxPerHour ? Number(c.surge.maxPerHour) : null,
       postsPerHour: Number(c.postsPerHour ?? c.maxPerHour ?? defaults.maxPerHour),
       // Copy another channel's hourly posting pattern (pace.js).
       paceLike: c.paceLike ? String(c.paceLike).replace(/^@/, '') : null,

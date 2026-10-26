@@ -1,5 +1,6 @@
 import { pool } from '../db/pool.js';
 import { getState, setState } from '../db/appState.js';
+import { refreshSurge, surgeActive } from './surge.js';
 
 // Posting pace copied from another channel ("paceLike": "@Middle_East_Spectator"
 // in channels.json): that channel's own posts per hour of the day (local
@@ -155,6 +156,7 @@ async function refreshOwnPace(channel, config, { fetch, fetchPosts }) {
 
 // `fetch: false` only reads what the server last saved (no Telegram).
 export async function refreshPaces(config, { fetch = true, fetchPosts = fetchSettledPosts } = {}) {
+  if (config.channels.some((c) => c.surgeMaxPerHour)) await refreshSurge({ detect: fetch }).catch(() => null);
   for (const c of config.channels) {
     if (c.pace === 'stats') await refreshOwnPace(c, config, { fetch, fetchPosts }).catch(() => null);
     else if (c.paceLike) await paceProfile(c.paceLike, config.timeZone).catch(() => null);
@@ -171,8 +173,20 @@ export function ownPace(channel) {
 
 const fromRate = (rate) => ({ maxPerHour: Math.max(1, Math.ceil(rate)), minGapMinutes: Math.round(60 / rate) });
 
-// { maxPerHour, minGapMinutes } for the channel at `date`.
+// { maxPerHour, minGapMinutes } for the channel at `date`; in big-event mode
+// (surge.js) a channel with surgeMaxPerHour gets at least that many.
 export function limitsFor(channel, config, date = new Date()) {
+  const base = baseLimits(channel, config, date);
+  if (!channel.surgeMaxPerHour || !surgeActive(date.getTime())) return base;
+  const surge = channel.surgeMaxPerHour;
+  return {
+    maxPerHour: Math.max(base.maxPerHour, surge),
+    minGapMinutes: Math.min(base.minGapMinutes, Math.round(60 / surge)),
+    surge: true,
+  };
+}
+
+function baseLimits(channel, config, date) {
   if (channel.pace === 'stats') {
     const plan = ownPace(channel);
     return fromRate(plan ? plan.rates[localHour(date, config.timeZone)] : channel.postsPerHour);

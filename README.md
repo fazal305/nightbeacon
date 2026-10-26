@@ -56,7 +56,7 @@ Target channels are configured in `server/channels/channels.json`:
 | @ResistanceMediaNews | Bot (@Nightbeaconbot) posts high priority automatically | ~1/hour on average, re-paced weekly from last week's views, up to 2/hour | quiet hours 02:00–07:00 |
 | @GiviDpr, @RezistanceTrench1 | Drafts in the dashboard — Copy, then Mark as sent | 2/hour | unsent drafts expire after 6 hours |
 
-Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `exclusiveGroup`,
+Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `surge`, `exclusiveGroup`,
 `notify`, `quietHours`, `digest`, `banners`) are in `channels.json`; the
 Publishing page shows them per channel, with posts this hour, posted in the
 last 24 h and repeats blocked.
@@ -101,6 +101,16 @@ last 24 h and repeats blocked.
   The plan is saved in the database, so restarts don't reset it.
   `npm run publish:check` shows the plan per hour and the day it was read;
   `npm run stats:posts` shows the views behind it.
+- **Big-event mode** — `"surge": { "maxPerHour": 6 }`: when something
+  major breaks, R3SYST may post up to 6 an hour and RMN up to 4 (10 and 15
+  minutes apart). It turns on by itself when high-priority stories in the
+  last hour reach 3× last week's hourly average (and at least 12), or one
+  story is reported by 40+ channels, and stays on until 2 hours after the
+  last burst. On the Publishing page, **⚡ Big event: post more for 3 hours**
+  turns it on by hand and **Back to normal pace** turns it off. Thresholds:
+  `SURGE_RATIO`, `SURGE_MIN_STORIES`, `SURGE_STORY_REPORTS`,
+  `SURGE_HOLD_HOURS` in `.env`; `npm run publish:check` shows the
+  current numbers next to them.
 - **Quiet delivery** — `"notify": "breaking"`: only headline posts (BREAKING,
   URGENT, 🔴…), summaries and Post now ring subscribers' phones, the rest
   arrive silently; `"quietHours": "06:00-10:00"` makes every post silent in

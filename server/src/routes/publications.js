@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { publishConfig, channelByKey } from '../publishing/config.js';
 import { publishGate, publishingStats, isSilent } from '../publishing/sender.js';
 import { limitsFor, refreshPaces, ownPace } from '../publishing/pace.js';
+import { surgeActive, setSurge } from '../publishing/surge.js';
 import { loadBestMedia } from '../publishing/media.js';
 import { describeError } from '../db/describeError.js';
 
@@ -129,6 +130,7 @@ publicationsRouter.get('/status', h(async (req, res) => {
         maxPerHour: c.maxPerHour,
         limitThisHour: limit.maxPerHour,
         minGapMinutes: Math.round(limit.minGapMinutes * 10) / 10,
+        surgeMaxPerHour: c.surgeMaxPerHour,
         paceLike: c.pace ? null : c.paceLike,
         pace: c.pace,
         postsPerHour: c.postsPerHour,
@@ -149,6 +151,7 @@ publicationsRouter.get('/status', h(async (req, res) => {
         lastPostedAt: a.last_posted_at || null,
       };
     }),
+    surge: config.channels.some((c) => c.surgeMaxPerHour) ? surgeActive() || { off: true } : null,
     botConfigured: Boolean(config.botToken),
     draftProvider: config.draftProvider,
     minIntervalSeconds: config.minIntervalSeconds,
@@ -157,6 +160,13 @@ publicationsRouter.get('/status', h(async (req, res) => {
     lastError: publishingStats.lastError,
     counts: Object.fromEntries(rows.map((r) => [r.status, r.n])),
   });
+}));
+
+// Big-event mode: { hours: 3 } switches it on for 3 hours, { hours: 0 } off.
+publicationsRouter.post('/surge', h(async (req, res) => {
+  const parsed = z.object({ hours: z.coerce.number().min(0).max(24) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'hours (0-24) required' });
+  res.json({ surge: await setSurge(parsed.data.hours) });
 }));
 
 // Ask for drafts of a post — for one channel, or all configured channels.

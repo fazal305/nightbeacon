@@ -62,6 +62,7 @@ export const api = {
     `${BASE}/publications/item/${rawItemId}/media/${index}${download ? '?download=1' : ''}`,
   requestDraft: (rawItemId, channelKey) =>
     request('/publications', { method: 'POST', body: JSON.stringify({ rawItemId, channelKey }) }),
+  setSurge: (hours) => request('/publications/surge', { method: 'POST', body: JSON.stringify({ hours }) }),
   updatePublication: (id, body) => request(`/publications/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   activity: (params = {}) => {
     const qs = new URLSearchParams(

@@ -10,6 +10,7 @@ import { pool } from '../db/pool.js';
 import { describeError } from '../db/describeError.js';
 import { withTimeout, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
 import { limitsFor, refreshPaces, paceProfile, ownPace, localHour } from './pace.js';
+import { surgeActive, surgeSignals, surgeSettings } from './surge.js';
 import { publishConfig } from './config.js';
 import { getBotClient, getChannelPeer, sendToChannel } from './botClient.js';
 
@@ -86,6 +87,13 @@ async function main() {
 
   console.log('\n4. Posting pace (bot channels, last hour)');
   await refreshPaces(config, { fetch: false });
+  if (config.channels.some((c) => c.surgeMaxPerHour)) {
+    const on = surgeActive();
+    const sig = await surgeSignals();
+    const set = surgeSettings();
+    info(`Big-event mode: ${on ? `ON until ${new Date(on.until).toLocaleTimeString()} — ${on.reason}` : 'off'}`);
+    info(`  high-priority stories last hour ${sig.lastHour} (usual ${sig.hourlyAvg}/h; turns on at ${set.minStories}+ and ${set.ratio}× usual) · biggest story ${sig.topReports} channels (turns on at ${set.storyReports})`);
+  }
   for (const channel of config.channels.filter((c) => c.delivery === 'bot')) {
     const lim = limitsFor(channel, config);
     if (channel.pace === 'stats') {
