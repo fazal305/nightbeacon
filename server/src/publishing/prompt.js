@@ -85,6 +85,17 @@ export function removeBannedFlags(text, banned = []) {
     .replace(/^[ \t]+/gm, '');
 }
 
+// The channel's exact last line ("signoff" in channels.json, e.g.
+// "@WarCabinet"): any trailing line the model wrote with the channel's handle
+// (say "✨ @WarCabinet", copied from older posts) is replaced by it.
+export function applySignoff(text, signoff) {
+  if (!text || !signoff) return text;
+  const handle = (signoff.match(/@[\w]+/) || [signoff.trim()])[0].toLowerCase();
+  const lines = text.replace(/\s+$/, '').split('\n');
+  while (lines.length && (!lines[lines.length - 1].trim() || lines[lines.length - 1].toLowerCase().includes(handle))) lines.pop();
+  return `${lines.join('\n').replace(/\s+$/, '')}\n\n${signoff}`;
+}
+
 // Official statements are posted word for word (only translated). For the
 // check, links, @handles, #tags, emoji, punctuation and case are ignored —
 // the posting rules drop links/handles, and header/footer lines are added.

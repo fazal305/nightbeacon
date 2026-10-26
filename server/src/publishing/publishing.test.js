@@ -120,6 +120,14 @@ test('banned emoji (PUBLISH_BANNED_EMOJI) are removed from drafts without leavin
   assert.match(sys, /Never use these emoji: 🇩🇪/);
 });
 
+test('signoff: the channel\'s exact last line replaces whatever sign-off the model wrote', async () => {
+  const { applySignoff } = await import('./prompt.js');
+  assert.equal(applySignoff('🔴 News here.\n\n✨ @WarCabinet', '@WarCabinet'), '🔴 News here.\n\n@WarCabinet');
+  assert.equal(applySignoff('🔴 News here.\n✨ @warcabinet\n\n', '@WarCabinet'), '🔴 News here.\n\n@WarCabinet');
+  assert.equal(applySignoff('🔴 News here.', '@WarCabinet'), '🔴 News here.\n\n@WarCabinet');
+  assert.equal(applySignoff('🔴 News here.\n\n✨ @Other', null), '🔴 News here.\n\n✨ @Other', 'no signoff set: unchanged');
+});
+
 test('official channels: statements only from the organisation\'s own channel; the model is told the source type', () => {
   const officialSources = new Map([['health_official', 'Ministry of Health']]);
   const target = [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }];

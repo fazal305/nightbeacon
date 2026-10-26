@@ -60,6 +60,8 @@ import path from 'node:path';
 //                    display name contains them (any case)
 //   blockSources     same format: reports from these sources are never
 //                    drafted for this channel
+//   signoff          the exact last line of every post, e.g. "@your_channel"
+//                    (replaces whatever sign-off the model wrote)
 //   timeZone         this channel's time zone for summary times, quiet hours
 //                    and its hourly pace (default PUBLISH_TIMEZONE)
 //   paceLike         a monitored channel's @username: its posts per hour of
@@ -194,6 +196,7 @@ export function normalizeChannels(rawChannels, defaults) {
       trustSources: sourceList(c.trustSources),
       blockSources: sourceList(c.blockSources),
       timeZone: c.timeZone ? validTimeZone(String(c.timeZone), key) : null,
+      signoff: c.signoff ? String(c.signoff).trim() : null,
       surgeMaxPerHour: c.surge?.maxPerHour ? Number(c.surge.maxPerHour) : null,
       postsPerHour: Number(c.postsPerHour ?? c.maxPerHour ?? defaults.maxPerHour),
       // Copy another channel's hourly posting pattern (pace.js).
