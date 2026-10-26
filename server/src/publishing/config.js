@@ -62,6 +62,9 @@ import path from 'node:path';
 //                    drafted for this channel
 //   signoff          the exact last line of every post, e.g. "@your_channel"
 //                    (replaces whatever sign-off the model wrote)
+//   capsHeadline     false: no first line in CAPITALS; the story starts
+//                    straight away (the emoji/flags move to its first line)
+//   hashtags         "end": hashtags go on their own line after the sign-off
 //   timeZone         this channel's time zone for summary times, quiet hours
 //                    and its hourly pace (default PUBLISH_TIMEZONE)
 //   paceLike         a monitored channel's @username: its posts per hour of
@@ -197,6 +200,8 @@ export function normalizeChannels(rawChannels, defaults) {
       blockSources: sourceList(c.blockSources),
       timeZone: c.timeZone ? validTimeZone(String(c.timeZone), key) : null,
       signoff: c.signoff ? String(c.signoff).trim() : null,
+      capsHeadline: c.capsHeadline !== false,
+      hashtags: c.hashtags === 'end' ? 'end' : null,
       surgeMaxPerHour: c.surge?.maxPerHour ? Number(c.surge.maxPerHour) : null,
       postsPerHour: Number(c.postsPerHour ?? c.maxPerHour ?? defaults.maxPerHour),
       // Copy another channel's hourly posting pattern (pace.js).

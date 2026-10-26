@@ -96,6 +96,60 @@ export function applySignoff(text, signoff) {
   return `${lines.join('\n').replace(/\s+$/, '')}\n\n${signoff}`;
 }
 
+// A first line written in CAPITALS ("🔴 🇮🇷 IRAN LAUNCHES …") is dropped when
+// the story follows it; its leading emoji and flags move to the story's first
+// line. For channels with "capsHeadline": false.
+export function dropCapsHeadline(text) {
+  if (!text) return text;
+  const lines = text.split('\n');
+  const first = lines.findIndex((l) => l.trim());
+  if (first < 0) return text;
+  const m = lines[first].match(/^([^\p{L}\p{N}#]*)(.*)$/u);
+  const letters = (m[2].match(/\p{L}/gu) || []).join('');
+  const upper = (letters.match(/\p{Lu}/gu) || []).length;
+  if (letters.length < 8 || upper / letters.length < 0.7) return text;
+  const next = lines.findIndex((l, i) => i > first && l.trim());
+  if (next < 0) return text;
+  const prefix = m[1].trim();
+  lines[next] = prefix ? `${prefix} ${lines[next].trim()}` : lines[next];
+  return lines.slice(next).join('\n');
+}
+
+// Hashtags moved to their own line at the very end, after the sign-off
+// ("hashtags": "end"): an inline "#Iran" keeps the word "Iran" in the text.
+export function hashtagsAtEnd(text, signoff) {
+  if (!text) return text;
+  const tags = [];
+  const add = (t) => {
+    if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+  };
+  const lines = text.split('\n');
+  const keep = [];
+  for (const line of lines) {
+    if (signoff && line.trim() === signoff) {
+      keep.push(line);
+      continue;
+    }
+    (line.match(/#[\p{L}\p{N}_]+/gu) || []).forEach((t) => add(t.slice(1)));
+    // Hashtags ending a line go (a line of only hashtags goes entirely);
+    // ones inside a sentence keep their word.
+    const rest = line.replace(/(\s*#[\p{L}\p{N}_]+)+\s*$/u, '');
+    if (!rest.trim() && line.trim()) continue;
+    keep.push(rest.replace(/#([\p{L}\p{N}_]+)/gu, '$1'));
+  }
+  const body = keep.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+  if (!tags.length) return body;
+  return `${body}${signoff ? '\n' : '\n\n'}${tags.map((t) => `#${t}`).join(' ')}`;
+}
+
+// Per-channel finishing of a draft or summary: headline, sign-off, hashtags.
+export function applyChannelFormat(text, channel) {
+  let out = channel.capsHeadline === false ? dropCapsHeadline(text) : text;
+  out = applySignoff(out, channel.signoff);
+  if (channel.hashtags === 'end') out = hashtagsAtEnd(out, channel.signoff);
+  return out;
+}
+
 // Official statements are posted word for word (only translated). For the
 // check, links, @handles, #tags, emoji, punctuation and case are ignored —
 // the posting rules drop links/handles, and header/footer lines are added.

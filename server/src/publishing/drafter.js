@@ -8,7 +8,7 @@ import { findRepeat, sameNewsChannels } from './sameNews.js';
 import { surgeActive } from './surge.js';
 import { limitsFor, refreshPaces } from './pace.js';
 import {
-  buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags, applySignoff,
+  buildDraftMessages, parseDraft, parseMultiDraft, applyTerminology, removeBannedFlags, applyChannelFormat,
   keepsStatementVerbatim, statementText, officialOrganisation,
 } from './prompt.js';
 
@@ -218,7 +218,7 @@ async function saveDraft(pub, channel, item, draft, model, config) {
   // terminology inside it, and if the model changed any words it is not
   // posted automatically — it waits for review with a note.
   const official = officialOrganisation(item, config.officialSources);
-  const text = applySignoff(removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology), config.bannedEmoji), channel.signoff);
+  const text = applyChannelFormat(removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology), config.bannedEmoji), channel);
   // Second duplicate check, on the finished post (automatic ones only).
   if (pub.origin === 'auto') {
     const same = await findRepeat(text, config, channel, { exceptId: pub.id });

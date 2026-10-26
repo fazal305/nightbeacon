@@ -128,6 +128,19 @@ test('signoff: the channel\'s exact last line replaces whatever sign-off the mod
   assert.equal(applySignoff('🔴 News here.\n\n✨ @Other', null), '🔴 News here.\n\n✨ @Other', 'no signoff set: unchanged');
 });
 
+test('channel format: no CAPITALS headline, hashtags after the sign-off', async () => {
+  const { applyChannelFormat } = await import('./prompt.js');
+  const ch = { signoff: '@WarCabinet', capsHeadline: false, hashtags: 'end' };
+  assert.equal(
+    applyChannelFormat('🔴 🇮🇷 IRAN LAUNCHES DRONES AT A BASE\n\n#Iran launched drones at a base in #Iraq, officials said.\n\n#Iran #Iraq #MiddleEast\n\n✨ @WarCabinet', ch),
+    '🔴 🇮🇷 Iran launched drones at a base in Iraq, officials said.\n\n@WarCabinet\n#Iran #Iraq #MiddleEast'
+  );
+  assert.equal(applyChannelFormat('🟢 🇪🇬 Talks continue in Cairo. #Egypt', ch), '🟢 🇪🇬 Talks continue in Cairo.\n\n@WarCabinet\n#Egypt');
+  assert.equal(applyChannelFormat('🔴 BREAKING: Talks are over.\n✨ @WarCabinet', ch), '🔴 BREAKING: Talks are over.\n\n@WarCabinet', 'mixed-case first line stays');
+  assert.equal(applyChannelFormat('🔴 ONLY A HEADLINE HERE', ch), '🔴 ONLY A HEADLINE HERE\n\n@WarCabinet', 'nothing to fall back on: kept');
+  assert.equal(applyChannelFormat('🔴 HEADLINE IN CAPS\nBody. #Iran', {}), '🔴 HEADLINE IN CAPS\nBody. #Iran', 'other channels unchanged');
+});
+
 test('official channels: statements only from the organisation\'s own channel; the model is told the source type', () => {
   const officialSources = new Map([['health_official', 'Ministry of Health']]);
   const target = [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }];

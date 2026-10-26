@@ -2,7 +2,7 @@ import { pool } from '../db/pool.js';
 import { callLLM } from '../processing/llmClient.js';
 import { publishConfig, tzOf } from './config.js';
 import { getStyleContext } from './style.js';
-import { buildDigestMessages, parseDraft, applyTerminology, removeBannedFlags, applySignoff } from './prompt.js';
+import { buildDigestMessages, parseDraft, applyTerminology, removeBannedFlags, applyChannelFormat } from './prompt.js';
 
 // Scheduled summary posts: at each of a channel's digest times (local time
 // in PUBLISH_TIMEZONE), a roundup of the most important stories since the
@@ -122,7 +122,7 @@ export async function runDigestTick({ llm = callLLM, styleFn = getStyleContext, 
       const autoApprove = config.mode === 'auto' && channel.delivery === 'bot';
       await recordSlot(channel, current, {
         status: autoApprove ? 'approved' : 'draft',
-        text: applySignoff(removeBannedFlags(applyTerminology(draft.text, config.terminology), config.bannedEmoji), channel.signoff),
+        text: applyChannelFormat(removeBannedFlags(applyTerminology(draft.text, config.terminology), config.bannedEmoji), channel),
         model,
         detail: `summary of ${stories.length} stories`,
       });

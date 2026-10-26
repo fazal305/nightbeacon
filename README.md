@@ -58,7 +58,7 @@ Each channel is either a **bot channel** (your bot is an admin there and
 posts by itself) or a **manual channel** (drafts wait in the dashboard:
 Copy, post it yourself, then Mark as sent; unsent drafts expire after 6
 hours). Each channel's settings (`postsPerHour`, `maxPerHour`, `pace`, `surge`, `exclusiveGroup`,
-`trustSources` / `blockSources` (sources it prefers or never uses), `signoff` (exact last line), `timeZone` (its own
+`trustSources` / `blockSources` (sources it prefers or never uses), `signoff` (exact last line), `capsHeadline: false` (no CAPITALS heading), `hashtags: "end"` (hashtags after the sign-off), `timeZone` (its own
 zone for summaries, quiet hours and pace),
 `notify`, `quietHours`, `digest`, `banners`) are in `channels.json`; the
 Publishing page shows them per channel, with posts this hour, posted in the
