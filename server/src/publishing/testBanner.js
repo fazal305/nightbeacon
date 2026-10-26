@@ -1,7 +1,7 @@
 // Posts one message with a banner to a bot channel, to see how it looks.
-//   npm run publish:test-banner                          breaking banner, r3syst
+//   npm run publish:test-banner                          breaking banner, first bot channel with banners
 //   npm run publish:test-banner -- --banner urgent --text "⚡ URGENT | ..."
-//   npm run publish:test-banner -- --channel r3syst
+//   npm run publish:test-banner -- --channel <key>
 import 'dotenv/config';
 import { publishConfig } from './config.js';
 import { sendToChannel } from './botClient.js';
@@ -21,7 +21,7 @@ try {
   if (!channel) throw new Error(key ? `no channel "${key}" in channels.json` : 'no bot channel with "banners" in channels.json');
   if (!channel.banners) throw new Error(`channel "${channel.key}" has no "banners" setting`);
   const banner = arg('banner', null);
-  const text = arg('text', '🔴 BREAKING NEWS\nThis is a test post for the new r3syst banners.');
+  const text = arg('text', '🔴 BREAKING NEWS\nThis is a test post for the channel\'s banners.');
   let media;
   if (banner) {
     const file = bannerFile(channel, `${banner.replace(/\.jpg$/, '')}.jpg`);

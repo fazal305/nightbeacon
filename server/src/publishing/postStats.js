@@ -3,20 +3,22 @@
 // posting, with or without a photo/video, headline style, and length; plus
 // the best and worst posts. Only posts older than a day are compared (views
 // keep growing for a while).
-//   npm run stats:posts                       (@r3syst, last 14 days)
-//   npm run stats:posts -- @ResistanceMediaNews --days 7
+//   npm run stats:posts                       (first bot channel, last 14 days)
+//   npm run stats:posts -- @your_channel --days 7
 import 'dotenv/config';
 import { getTelegramClient, withTimeout, REQUEST_TIMEOUT_MS } from '../ingestion/telegramClient.js';
 import { findChannelPeer } from './style.js';
 import { localHour, readChannelPosts } from './pace.js';
 import { isHeadlinePost } from './banners.js';
 import { pool } from '../db/pool.js';
+import { publishConfig } from './config.js';
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > -1 ? process.argv[i + 1] : fallback;
 };
-const channel = `@${(process.argv.slice(2).find((a) => a.startsWith('@')) || '@r3syst').replace(/^@/, '')}`;
+const firstBot = () => publishConfig().channels.find((c) => c.delivery === 'bot')?.telegram;
+const channel = `@${(process.argv.slice(2).find((a) => a.startsWith('@')) || firstBot() || '').replace(/^@/, '')}`;
 const days = Number(arg('days', 14));
 const timeZone = process.env.PUBLISH_TIMEZONE || 'Asia/Karachi';
 

@@ -210,7 +210,7 @@ async function saveDraft(pub, channel, item, draft, model, config) {
   // terminology inside it, and if the model changed any words it is not
   // posted automatically — it waits for review with a note.
   const official = officialOrganisation(item, config.officialSources);
-  const text = removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology));
+  const text = removeBannedFlags(official ? draft.text : applyTerminology(draft.text, config.terminology), config.bannedEmoji);
   // Second duplicate check, on the finished post (automatic ones only).
   if (pub.origin === 'auto') {
     const same = await findSameNews(text, sameNewsChannels(config, channel), { exceptId: pub.id });
@@ -307,7 +307,7 @@ export async function draftGroup(group, config, { llm = callLLM, styleFn = getSt
   }
 
   try {
-    const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules }), {
+    const { content, model } = await llm(buildDraftMessages({ item, targets, terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules, bannedEmoji: config.bannedEmoji }), {
       providerName: providerName || config.draftProvider,
       model: providerName ? undefined : config.draftModel || undefined,
       temperature: 0.4,

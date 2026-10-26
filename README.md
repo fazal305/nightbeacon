@@ -48,7 +48,11 @@ ready-to-copy drafts for the rest.
 
 ## Publishing
 
-Target channels are configured in `server/channels/channels.json`.
+Target channels are configured in `server/channels/channels.json`. That
+folder is private (gitignored): your channels, style guides, terminology,
+rules, banners and logos stay on your machine. To start, copy
+`server/channels.example/` to `server/channels/` and set
+`PUBLISH_CHANNELS_FILE=channels/channels.json` in `server/.env`.
 
 Each channel is either a **bot channel** (your bot is an admin there and
 posts by itself) or a **manual channel** (drafts wait in the dashboard:
@@ -69,6 +73,10 @@ last 24 h and repeats blocked.
   - `official-sources.md` — the only channels whose statements are treated
     as official; those statements are posted word for word (translated only)
   - `house-rules.md` — extra house style
+  - `organisations.md` — names for `npm run sources:official`
+
+  Emoji that must never appear go in `PUBLISH_BANNED_EMOJI` in
+  `server/.env`; they are removed from every draft and summary.
   - `<channel>.md` — each channel's style guide
 - **Media** — the source's photos/videos (whole albums) are reposted with the
   text, preferring the cleanest copy: the official channel's upload first;
@@ -111,9 +119,8 @@ last 24 h and repeats blocked.
   the audience's night (fewer mutes and leaves).
 - **Banners** — each bot channel can have its own banner set built around
   its logo (`server/channels/banners/<channel>/`: breaking, urgent, live,
-  developing, statement, update, alert, summary). Re-render or change
-  labels with `node tools/banners/render-logo-banners.mjs` (logos:
-  `tools/banners/*-logo.png`). A source photo that is only another channel's
+  developing, statement, update, alert, summary: 1600×900 JPEGs you make
+  yourself). A source photo that is only another channel's
   generic "breaking news" card (recognised from examples in
   `server/channels/banners/known/`, or because the same picture keeps coming
   with different stories) is swapped for the matching banner; headline posts
@@ -232,9 +239,10 @@ Node.js · Express · PostgreSQL (+ pg_trgm) · GramJS. See
 ```
 web/       React + Vite frontend
 server/    Express API, ingestion/dedup/translation/publishing workers
-server/channels/  Channel config, style guides and writing rules
+server/channels.example/  Example channel config, style guides and rules
+           (copy to server/channels/, which is private)
 db/        SQL migrations and seed scripts
-tools/     Optional local translators (NLLB), banner renderer (tools/banners)
+tools/     Optional local translators (NLLB)
 deploy/    GCP provisioning + systemd/nginx scripts (not yet used)
 docs/      Architecture, pipeline, publishing, database, security docs, screenshots
 ```

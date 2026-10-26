@@ -7,12 +7,12 @@ import { limitsFor, _setPaceProfileForTests, _setOwnStatsForTests, localHour, pa
 after(() => pool.end());
 
 test('same news: reworded posts of one event match; different events do not', () => {
-  const a = '🔴 IOF airstrike on the town of Aitaroun in south Lebanon, 3 people martyred, 7 wounded.\n#Lebanon\n@r3syst';
-  const b = 'BREAKING: Three martyred and 7 wounded as the IOF strikes Aitaroun, south Lebanon. #Lebanon #MiddleEast\n@ResistanceMediaNews';
-  const c = 'Iran\'s foreign minister said talks with the IAEA will continue in Vienna next week. #Iran\n@r3syst';
+  const a = '🔴 Storm floods the town of Rivermouth on the north coast, 3 people dead, 7 injured.\n#Weather\n@example_news';
+  const b = 'BREAKING: Three dead and 7 injured as a storm floods Rivermouth, north coast. #Weather #Storm\n@example_world';
+  const c = 'The foreign minister said trade talks will continue in Vienna next week. #Trade\n@example_news';
   assert.equal(isSameNews(a, b), true, `similarity ${similarity(a, b)}`);
   assert.equal(isSameNews(a, c), false);
-  assert.equal(isSameNews('🔴 BREAKING\n@r3syst', '🔴 BREAKING\n@r3syst'), false, 'too short to judge');
+  assert.equal(isSameNews('🔴 BREAKING\n@example_news', '🔴 BREAKING\n@example_news'), false, 'too short to judge');
 });
 
 test('pace: a channel follows another channel\'s hourly pattern, capped by its maxPerHour', () => {
@@ -20,8 +20,8 @@ test('pace: a channel follows another channel\'s hourly pattern, capped by its m
   const now = new Date();
   const h = localHour(now, 'Asia/Karachi');
   hours[h] = 3.4;
-  _setPaceProfileForTests('Spectator_Test', hours);
-  const ch = { key: 'x', maxPerHour: 6, minGapMinutes: 5, paceLike: 'Spectator_Test' };
+  _setPaceProfileForTests('Pattern_Test', hours);
+  const ch = { key: 'x', maxPerHour: 6, minGapMinutes: 5, paceLike: 'Pattern_Test' };
   assert.deepEqual(limitsFor(ch, { timeZone: 'Asia/Karachi' }, now), { maxPerHour: 3, minGapMinutes: 10 });
   hours[h] = 15;
   assert.equal(limitsFor(ch, { timeZone: 'Asia/Karachi' }, now).maxPerHour, 6, 'never above maxPerHour');

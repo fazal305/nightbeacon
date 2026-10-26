@@ -30,8 +30,10 @@ failover. No new dependency. Pacing uses the existing `RateGate`
    TELEGRAM_BOT_TOKEN=123456:ABC...
    PUBLISH_MODE=review          # off | review | auto (see below)
    ```
-3. **Your channels** — copy `server/publish-channels.example.json` to
-   `server/publish-channels.json` (gitignored) and edit:
+3. **Your channels** — copy the folder `server/channels.example/` to
+   `server/channels/` (gitignored, so your channels, style guides, rules and
+   banners stay private), set `PUBLISH_CHANNELS_FILE=channels/channels.json`,
+   and edit `channels.json`:
    ```json
    [
      { "key": "main",   "name": "Main",   "telegram": "@my_main",   "delivery": "bot",
@@ -95,7 +97,7 @@ download links, to attach when you post.
 
 `server/channels/terminology.md` (or `PUBLISH_TERMINOLOGY_FILE`) lists names
 used in every post on every channel, one `term => replacement` per line —
-e.g. `IDF => IOF`, `Houthis => Ansarallah`. The model is told to use them, and
+e.g. `PM => Prime Minister`. The model is told to use them, and
 the swaps are also applied to each draft's text (whole words, any
 capitalisation, longest term first), so they hold even when the model copies
 the source's wording. Edits apply to the next draft; no restart needed.
@@ -105,17 +107,18 @@ the source's wording. Edits apply to the next draft; no restart needed.
 `server/channels/house-rules.md` holds plain-language rules (one per line)
 added to the drafting instructions of every channel and of the summaries —
 for wording that depends on context and so can't be a simple term swap,
-e.g. "write *martyred* for Palestinian, Iranian or Iraqi deaths". Official
+e.g. "give casualty figures exactly as the source states them". Official
 statements still stay word for word. Edits apply to the next draft.
 
 ## Official statements
 
 `server/channels/official-sources.md` lists the official channels of
-organisations (`@username => Hezbollah`, one per line; find usernames with
+organisations (`@username => Ministry of Health`, one per line; find usernames with
 `npm run sources:list -- <name>`), or fill it from a Telegram folder of
 official channels with `npm run sources:official -- https://t.me/addlist/<slug>`,
 which also adds any of them not yet monitored and guesses each channel's
-organisation from its title (check and correct the names). A statement by a listed organisation is
+organisation from its title using `organisations.md` in the same folder
+(`Name => keyword, keyword`; check and correct the names). A statement by a listed organisation is
 posted only when it comes from that organisation's own channel; the same
 statement relayed by any other channel is skipped (`SKIP`). Ordinary news
 from other channels is unaffected. Reports from official channels score

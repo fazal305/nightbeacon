@@ -4,11 +4,9 @@
 # from other channels are not affected.
 #
 # One line per channel:  @channel_username => Organisation name
-# (the channel must be one of your monitored sources). Several channels may
-# belong to the same organisation. Find usernames with:
+# (the channel must be one of your monitored sources). Find usernames with:
 #   npm run sources:list -- <part of the name>
+# or fill it from a Telegram folder: npm run sources:official -- <folder link>
 #
-# Example (remove the # and use the real usernames):
-# @example_hezbollah_media => Hezbollah
-# @example_qassam => Al-Qassam Brigades
-# @example_ansarallah => Ansarallah
+# Example (remove the # and use real usernames):
+# @example_health_ministry => Ministry of Health

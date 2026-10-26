@@ -2,7 +2,7 @@ import { pool } from '../db/pool.js';
 import { getState, setState } from '../db/appState.js';
 import { refreshSurge, surgeActive } from './surge.js';
 
-// Posting pace copied from another channel ("paceLike": "@Middle_East_Spectator"
+// Posting pace copied from another channel ("paceLike": "@some_channel"
 // in channels.json): that channel's own posts per hour of the day (local
 // time, PUBLISH_TIMEZONE), averaged over the last 14 days from what
 // ingestion stored, become this channel's hourly limit for that hour —

@@ -92,36 +92,44 @@ test('prompt: one call covers several channels, each with its own style; facts-o
 });
 
 test('terminology: rules parsed from the file, told to the model, and enforced on the draft text', () => {
-  const rules = parseTerminology('# comment\nIDF => IOF\nIsrael Defense Forces => Israeli Occupation Forces\nHouthis => Ansarallah\nHouthi => Ansarallah\n\nnot a rule');
+  const rules = parseTerminology('# comment\nMoD => Defence Ministry\nMinistry of Defence => Defence Ministry\nRebels => Opposition fighters\nRebel => Opposition\n\nnot a rule');
   assert.equal(rules.length, 4);
   assert.equal(
-    applyTerminology('The Israel Defense Forces (IDF) said Houthi-controlled ports and the Houthis were hit. IDFX stays; idf said.', rules),
-    'The Israeli Occupation Forces (IOF) said Ansarallah-controlled ports and the Ansarallah were hit. IDFX stays; IOF said.'
+    applyTerminology('The Ministry of Defence (MoD) said Rebel-held ports and the Rebels were hit. MoDX stays; mod said.', rules),
+    'The Defence Ministry (Defence Ministry) said Opposition-held ports and the Opposition fighters were hit. MoDX stays; Defence Ministry said.'
   );
   const [{ content: sys }] = buildDraftMessages({
     item: { raw_text: 'x', telegram_date: new Date() },
     targets: [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }],
     terminology: rules,
   });
-  assert.match(sys, /write "IOF" instead of "IDF"/);
+  assert.match(sys, /write "Defence Ministry" instead of "MoD"/);
 });
 
-test('the Israeli flag is removed from drafts without leaving stray separators', () => {
-  assert.equal(removeBannedFlags('🇮🇷⚡🇮🇱 Strike reported\nText 🇮🇱 here'), '🇮🇷 Strike reported\nText here');
-  assert.equal(removeBannedFlags('🇮🇱⚡🇾🇪 Port hit'), '🇾🇪 Port hit');
-  assert.equal(removeBannedFlags('🇱🇧⚡🇺🇸 Untouched'), '🇱🇧⚡🇺🇸 Untouched');
+test('banned emoji (PUBLISH_BANNED_EMOJI) are removed from drafts without leaving stray separators', () => {
+  const banned = ['🇩🇪'];
+  assert.equal(removeBannedFlags('🇫🇷⚡🇩🇪 Talks reported\nText 🇩🇪 here', banned), '🇫🇷 Talks reported\nText here');
+  assert.equal(removeBannedFlags('🇩🇪⚡🇮🇹 Port reopened', banned), '🇮🇹 Port reopened');
+  assert.equal(removeBannedFlags('🇫🇷⚡🇮🇹 Untouched', banned), '🇫🇷⚡🇮🇹 Untouched');
+  assert.equal(removeBannedFlags('🇩🇪 kept without a list'), '🇩🇪 kept without a list');
+  const [{ content: sys }] = buildDraftMessages({
+    item: { raw_text: 'x', telegram_date: new Date() },
+    targets: [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }],
+    bannedEmoji: banned,
+  });
+  assert.match(sys, /Never use these emoji: 🇩🇪/);
 });
 
 test('official channels: statements only from the organisation\'s own channel; the model is told the source type', () => {
-  const officialSources = new Map([['hezb_official', 'Hezbollah']]);
+  const officialSources = new Map([['health_official', 'Ministry of Health']]);
   const target = [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }];
   const [{ content: sys }, { content: fromOfficial }] = buildDraftMessages({
-    item: { raw_text: 'x', telegram_date: new Date(), channel_username: 'Hezb_Official' },
+    item: { raw_text: 'x', telegram_date: new Date(), channel_username: 'Health_Official' },
     targets: target,
     officialSources,
   });
-  assert.match(sys, /Official statements: for these organisations — Hezbollah — [\s\S]*use exactly SKIP/);
-  assert.match(fromOfficial, /Source: the official channel of Hezbollah/);
+  assert.match(sys, /Official statements: for these organisations — Ministry of Health — [\s\S]*use exactly SKIP/);
+  assert.match(fromOfficial, /Source: the official channel of Ministry of Health/);
   const [, { content: fromOther }] = buildDraftMessages({
     item: { raw_text: 'x', telegram_date: new Date(), channel_username: 'random_news' },
     targets: target,
@@ -134,18 +142,18 @@ test('official channels: statements only from the organisation\'s own channel; t
 
 test('house rules: plain lines from the file reach every channel\'s prompt', async () => {
   const rulesFile = path.join(path.dirname(channelsFile), 'house-rules.md');
-  fs.writeFileSync(rulesFile, '# comment\nWrite "martyred" for Palestinian deaths.\n\n');
+  fs.writeFileSync(rulesFile, '# comment\nGive casualty figures exactly as stated.\n\n');
   try {
     setChannels([MAIN, ALERTS]);
     const { publishConfig } = await import('./config.js');
     const config = publishConfig();
-    assert.deepEqual(config.houseRules, ['Write "martyred" for Palestinian deaths.']);
+    assert.deepEqual(config.houseRules, ['Give casualty figures exactly as stated.']);
     const [{ content: sys }] = buildDraftMessages({
       item: { raw_text: 'x', telegram_date: new Date() },
       targets: [{ channel: { key: 'main', name: 'Main' }, style: { guide: '', examples: [] } }],
       houseRules: config.houseRules,
     });
-    assert.match(sys, /House writing rules[\s\S]*- Write "martyred" for Palestinian deaths\./);
+    assert.match(sys, /House writing rules[\s\S]*- Give casualty figures exactly as stated\./);
   } finally {
     fs.rmSync(rulesFile, { force: true });
   }
@@ -221,7 +229,7 @@ test('selection: best score wins (priority × corroboration × freshness), one s
 test('selection: a report from an official channel scores double', async () => {
   const officialFile = path.join(path.dirname(channelsFile), 'official-sources.md');
   const username = (await pool.query('SELECT channel_username FROM sources WHERE id = $1', [sourceId])).rows[0].channel_username;
-  fs.writeFileSync(officialFile, `@${username} => Hezbollah\n`);
+  fs.writeFileSync(officialFile, `@${username} => Ministry of Health\n`);
   try {
     setChannels([{ ...MAIN, maxPerHour: 60 }]);
     const item = await readyItem({ minutesAgo: 5 });
@@ -239,19 +247,19 @@ test('official statements: word for word; no terminology inside; an altered stat
   const officialFile = path.join(path.dirname(channelsFile), 'official-sources.md');
   const termFile = path.join(path.dirname(channelsFile), 'terminology.md');
   const username = (await pool.query('SELECT channel_username FROM sources WHERE id = $1', [sourceId])).rows[0].channel_username;
-  fs.writeFileSync(officialFile, `@${username} => Hezbollah\n`);
-  fs.writeFileSync(termFile, 'Israeli army => Israeli occupation army\n');
-  const statement = 'The Islamic Resistance targeted a gathering of Israeli army soldiers at 14:30.';
+  fs.writeFileSync(officialFile, `@${username} => Ministry of Health\n`);
+  fs.writeFileSync(termFile, 'health ministry => Ministry of Health\n');
+  const statement = 'The health ministry opened a field hospital for flood victims at 14:30.';
   try {
     setChannels([{ ...MAIN, maxPerHour: 60, minGapMinutes: 0 }]);
     const exact = await readyItem({ text: statement });
-    await runDraftingTick({ llm: fakeLLM(() => `🇱🇧 Hezbollah:\n\n${statement}\n\n@main`), styleFn: style });
+    await runDraftingTick({ llm: fakeLLM(() => `🏥 Ministry of Health:\n\n${statement}\n\n@main`), styleFn: style });
     const p1 = await pubFor(exact);
     assert.equal(p1.status, 'approved', 'verbatim statement is posted automatically');
-    assert.match(p1.final_text, /Israeli army soldiers/, 'terminology not applied inside the statement');
+    assert.match(p1.final_text, /health ministry opened/, 'terminology not applied inside the statement');
 
     const reworded = await readyItem({ text: statement + ' ' });
-    await runDraftingTick({ llm: fakeLLM(() => '🇱🇧 Hezbollah targeted soldiers at 14:30.\n\n@main'), styleFn: style });
+    await runDraftingTick({ llm: fakeLLM(() => '🏥 The ministry opened a hospital at 14:30.\n\n@main'), styleFn: style });
     const p2 = await pubFor(reworded);
     assert.equal(p2.status, 'draft', 'altered statement waits for review');
     assert.match(p2.last_error, /wording differs/);

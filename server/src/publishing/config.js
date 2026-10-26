@@ -33,7 +33,7 @@ import path from 'node:path';
 //   media            false to post text only (default: the source's
 //                    photos/videos are posted with the text)
 //   banners          the channel's own banner images, e.g.
-//                    { "dir": "banners/r3syst", "textPosts": true, "digest": true }
+//                    { "dir": "banners/main", "textPosts": true, "digest": true }
 //                    (see banners.js): a source photo that is just a generic
 //                    "breaking news / live" card is swapped for the matching
 //                    banner; textPosts adds one to headline-style posts that
@@ -252,6 +252,8 @@ export function publishConfig(env = process.env) {
     terminology,
     officialSources,
     houseRules,
+    // Emoji never used on any channel, e.g. a flag (removed from every draft).
+    bannedEmoji: (env.PUBLISH_BANNED_EMOJI || '').split(/[\s,]+/).filter(Boolean),
     // off: only drafts you request from the dashboard; review: also drafts
     // stories automatically, you approve each; auto: bot-channel drafts at
     // autoPriorities are posted without review.

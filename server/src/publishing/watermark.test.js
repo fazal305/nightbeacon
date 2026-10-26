@@ -10,7 +10,8 @@ import { ffmpegAvailable } from './mediaCompare.js';
 const hasFfmpeg = ffmpegAvailable();
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nb-wm-'));
 const ff = (args) => execFileSync('ffmpeg', ['-v', 'error', '-y', ...args], { stdio: 'ignore' });
-const channel = (key) => ({ key, banners: { dir: path.resolve(`channels/banners/${key}`), watermark: true } });
+// The demo channel's test banners and logo (src/publishing/fixtures/banners/demo).
+const channel = (key) => ({ key, banners: { dir: path.resolve('src/publishing/fixtures/banners/demo'), watermark: true } });
 
 test('placement: small, never wider than a third of the picture', () => {
   const wide = placement(1280, 720, { w: 980, h: 361 });
@@ -34,7 +35,7 @@ test('photo: logo goes in an empty corner, not over another channel\'s logo or t
   ff(['-f', 'lavfi', '-i', 'color=c=0x6699cc:s=1280x720', '-f', 'lavfi', '-i', 'testsrc2=size=640x720', '-filter_complex',
     '[0][1]overlay=0:0,drawbox=x=1060:y=600:w=200:h=100:color=white@1:t=fill,drawtext=text=LOGO:x=1090:y=630:fontsize=40:fontcolor=red',
     '-frames:v', '1', file]);
-  const [out] = await applyWatermark(channel('r3syst'), [{ kind: 'photo', file, name: 'photo.jpg' }]);
+  const [out] = await applyWatermark(channel('demo'), [{ kind: 'photo', file, name: 'photo.jpg' }]);
   assert.notEqual(out.file, file);
   assert.ok(fs.existsSync(out.file));
   // The top-right corner (the only empty one) changed; the left half didn't.
@@ -49,9 +50,9 @@ test('video: watermarked, sound kept, our own banner never watermarked', { skip:
   const file = path.join(dir, 'clip.mp4');
   // Fully moving picture (no fixed overlay), so nothing counts as an existing logo.
   ff(['-f', 'lavfi', '-i', 'mandelbrot=s=640x360:rate=15', '-f', 'lavfi', '-i', 'sine=duration=3', '-t', '3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', file]);
-  const banner = { kind: 'photo', file: path.resolve('channels/banners/rmn/breaking.jpg'), name: 'breaking.jpg' };
-  const [v, b] = await applyWatermark(channel('rmn'), [{ kind: 'video', file, name: 'clip.mp4', duration: 3 }, banner]);
-  assert.match(path.basename(v.file), /^wm-rmn-clip\.mp4$/);
+  const banner = { kind: 'photo', file: path.resolve('src/publishing/fixtures/banners/demo/breaking.jpg'), name: 'breaking.jpg' };
+  const [v, b] = await applyWatermark(channel('other'), [{ kind: 'video', file, name: 'clip.mp4', duration: 3 }, banner]);
+  assert.match(path.basename(v.file), /^wm-other-clip\.mp4$/);
   const streams = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0', v.file]).toString();
   assert.match(streams, /video/);
   assert.match(streams, /audio/);
@@ -60,7 +61,7 @@ test('video: watermarked, sound kept, our own banner never watermarked', { skip:
 
 test('official channels\' photos/videos are posted without our logo', async () => {
   const media = [{ kind: 'photo', file: '/tmp/x.jpg', name: 'x.jpg' }];
-  const out = await applyWatermark(channel('r3syst'), media, { source: 'someofficial', official: true, detect: async () => false });
+  const out = await applyWatermark(channel('demo'), media, { source: 'someofficial', official: true, detect: async () => false });
   assert.equal(out[0].file, '/tmp/x.jpg');
 });
 
@@ -76,7 +77,7 @@ test('video: a logo that stays put while the footage moves is detected; a clean 
   assert.equal(await hasWatermark({ kind: 'video', file: stamped, duration: 4 }, 'stampchan', deps), true);
   // That channel stamps its media: its photos are left alone too.
   assert.equal(await hasWatermark({ kind: 'photo', file: '/nope.jpg' }, 'stampchan', deps), true);
-  const out = await applyWatermark(channel('r3syst'), [{ kind: 'video', file: stamped, name: 'stamped.mp4', duration: 4 }], {
+  const out = await applyWatermark(channel('demo'), [{ kind: 'video', file: stamped, name: 'stamped.mp4', duration: 4 }], {
     source: 'stampchan', detect: (m, s) => hasWatermark(m, s, deps),
   });
   assert.equal(out[0].file, stamped, 'not watermarked again');

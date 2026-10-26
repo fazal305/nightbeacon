@@ -17,29 +17,34 @@ import { pool } from './pool.js';
 import { getTelegramClient } from '../ingestion/telegramClient.js';
 import { publishConfig } from '../publishing/config.js';
 
-// Most specific first ("Kata'ib Hezbollah" before "Hezbollah").
-const ORGANISATIONS = [
-  ["Kata'ib Hezbollah", ['كتائب حزب الله', 'kataib hezbollah', "kata'ib hezbollah", 'kataib hizbollah']],
-  ['Islamic Resistance in Iraq', ['المقاومة الإسلامية في العراق', 'المقاومة الاسلامية في العراق', 'islamic resistance in iraq']],
-  ['Harakat al-Nujaba', ['النجباء', 'nujaba']],
-  ['Al-Qassam Brigades', ['القسام', 'qassam']],
-  ['Saraya al-Quds', ['سرايا القدس', 'saraya al-quds', 'saraya alquds', 'al-quds brigades', 'quds brigades']],
-  ['Palestinian Islamic Jihad', ['الجهاد الإسلامي', 'الجهاد الاسلامي', 'islamic jihad']],
-  ['Al-Aqsa Martyrs Brigades', ['شهداء الأقصى', 'شهداء الاقصى', 'al-aqsa martyrs']],
-  ['Abu Ali Mustafa Brigades', ['أبو علي مصطفى', 'ابو علي مصطفى', 'abu ali mustafa']],
-  ['PFLP', ['الجبهة الشعبية', 'pflp']],
-  ['Hamas', ['حماس', 'hamas']],
-  ['Yemeni Armed Forces', ['القوات المسلحة اليمنية', 'القوات المسلحة اليمني', 'الإعلام الحربي اليمني', 'يحيى سريع', 'yemeni armed forces', 'military media y']],
-  ['Ansarallah', ['أنصار الله', 'انصار الله', 'ansarallah', 'ansar allah']],
-  ['IRGC', ['سپاه', 'الحرس الثوري', 'irgc', 'sepah', 'revolutionary guard']],
-  // "الإعلام الحربي" (war media) is used by many groups; only Hezbollah's own
-  // channel pairs it with "المقاومة الإسلامية" and no other group name.
-  ['Hezbollah', ['حزب الله', 'المقاومة الإسلامية في لبنان', 'المقاومة الاسلامية في لبنان', 'الإعلام الحربي في المقاومة الإسلامية', 'hezbollah', 'hizbollah', 'hizbullah', 'islamic resistance in lebanon']],
-];
+// Organisation names come from organisations.md next to the channels file
+// (private, like the rest of the channels folder):
+//   Name => keyword, keyword, ...
+// The first organisation with a keyword in the channel's title wins, so list
+// the most specific first.
+export function parseOrganisations(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#') && l.includes('=>'))
+    .map((l) => {
+      const [name, keys] = l.split('=>');
+      return [name.trim(), keys.split(',').map((k) => k.trim()).filter(Boolean)];
+    })
+    .filter(([name, keys]) => name && keys.length);
+}
 
-export function guessOrganisation(title) {
+function loadOrganisations() {
+  const config = publishConfig();
+  const file = config.channelsFile
+    ? path.join(path.dirname(config.channelsFile), 'organisations.md')
+    : path.resolve('channels/organisations.md');
+  return fs.existsSync(file) ? parseOrganisations(fs.readFileSync(file, 'utf8')) : [];
+}
+
+export function guessOrganisation(title, organisations = loadOrganisations()) {
   const t = String(title || '').toLowerCase();
-  for (const [name, keys] of ORGANISATIONS) if (keys.some((k) => t.includes(k.toLowerCase()))) return name;
+  for (const [name, keys] of organisations) if (keys.some((k) => t.includes(k.toLowerCase()))) return name;
   return null;
 }
 
@@ -66,6 +71,7 @@ async function main() {
 
   const lines = [];
   let added = 0;
+  const organisations = loadOrganisations();
   for (const chat of result.chats || []) {
     const username = chat.username || chat.usernames?.find((u) => u.active)?.username;
     if (!username) {
@@ -80,7 +86,7 @@ async function main() {
       [username, chat.title || username, isChannel ? chat.id.toString() : null, isChannel ? chat.accessHash.toString() : null]
     );
     added += ins.rowCount;
-    const organisation = guessOrganisation(chat.title) || chat.title || username;
+    const organisation = guessOrganisation(chat.title, organisations) || chat.title || username;
     lines.push(`@${username} => ${organisation}`);
     console.log(`  @${username.padEnd(30)} ${String(chat.title).slice(0, 45).padEnd(46)} => ${organisation}`);
   }

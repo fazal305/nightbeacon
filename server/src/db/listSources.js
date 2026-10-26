@@ -1,6 +1,6 @@
 // Lists monitored sources, to find usernames for channels/official-sources.md:
 //   npm run sources:list                 all sources
-//   npm run sources:list -- qassam       only names/usernames containing "qassam"
+//   npm run sources:list -- ministry     only names/usernames containing "ministry"
 import 'dotenv/config';
 import { pool } from './pool.js';
 

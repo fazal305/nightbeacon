@@ -8,13 +8,17 @@ import { pool } from '../db/pool.js';
 import { pickBanner, isHeadlinePost, applyBanners } from './banners.js';
 import { ffmpegAvailable } from './mediaCompare.js';
 
-const dir = path.resolve('channels/banners/r3syst');
-const channel = { key: 'r3syst', banners: { dir, replace: true, textPosts: true, digest: true } };
+// Test banners (src/publishing/fixtures/banners): a demo channel's set and
+// another channel's generic card in known/.
+const fixtures = path.resolve('src/publishing/fixtures/banners');
+const dir = path.join(fixtures, 'demo');
+const channel = { key: 'demo', banners: { dir, replace: true, textPosts: true, digest: true } };
+process.env.BANNERS_KNOWN_DIR = path.join(fixtures, 'known');
 
 after(() => pool.end());
 
 test('the banner is picked from the post\'s wording', () => {
-  assert.equal(pickBanner('🔴 BREAKING: IOF strikes south Lebanon'), 'breaking.jpg');
+  assert.equal(pickBanner('🔴 BREAKING: storm hits the north coast'), 'breaking.jpg');
   assert.equal(pickBanner('⚡ URGENT | Explosion at the port'), 'urgent.jpg');
   assert.equal(pickBanner('🚨 Sirens sounding in the north'), 'alert.jpg');
   assert.equal(pickBanner('🔴 LIVE: coverage from the border'), 'live.jpg');
@@ -48,7 +52,7 @@ test('another channel\'s generic card is swapped for our banner (recognised from
   // A re-encoded, resized copy of the known card, as a channel would post it.
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'nb-banner-'));
   const card = path.join(tmp, 'card.jpg');
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', path.resolve('channels/banners/known/akhbarjm-khabar-fori.jpg'), '-vf', 'scale=1280:-2', '-q:v', '8', card]);
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', path.join(fixtures, 'known/other-channel-card.jpg'), '-vf', 'scale=1280:-2', '-q:v', '8', card]);
   const r = await applyBanners(
     { channel, media: [{ kind: 'photo', file: card }], text: '🔴 BREAKING | Strike on the port', storyId: 1 },
     { load: async () => null, save: async () => {} }

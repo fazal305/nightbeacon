@@ -3,8 +3,8 @@ import path from 'node:path';
 import { ffmpegAvailable, photoHash, hamming } from './mediaCompare.js';
 import { getState, setState } from '../db/appState.js';
 
-// The channel's own banner images (e.g. server/channels/banners/r3syst/,
-// rendered by tools/banners/render.mjs) used in place of other channels'
+// The channel's own banner images (e.g. server/channels/banners/<channel>/,
+// images you make, e.g. with your own banner tools) used in place of other channels'
 // generic "breaking news / live" cards:
 //
 //   - a source photo that is only such a card is swapped for the matching

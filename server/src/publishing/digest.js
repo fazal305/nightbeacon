@@ -110,7 +110,7 @@ export async function runDigestTick({ llm = callLLM, styleFn = getStyleContext, 
       const style = await styleFn(channel);
       const { content, model } = await llm(
         buildDigestMessages({ channel, style, stories, since: previous, timeZone: config.timeZone,
-          terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules }),
+          terminology: config.terminology, officialSources: config.officialSources, houseRules: config.houseRules, bannedEmoji: config.bannedEmoji }),
         { providerName: config.draftProvider, model: config.draftModel || undefined, temperature: 0.3 }
       );
       const draft = parseDraft(content);
@@ -122,7 +122,7 @@ export async function runDigestTick({ llm = callLLM, styleFn = getStyleContext, 
       const autoApprove = config.mode === 'auto' && channel.delivery === 'bot';
       await recordSlot(channel, current, {
         status: autoApprove ? 'approved' : 'draft',
-        text: removeBannedFlags(applyTerminology(draft.text, config.terminology)),
+        text: removeBannedFlags(applyTerminology(draft.text, config.terminology), config.bannedEmoji),
         model,
         detail: `summary of ${stories.length} stories`,
       });

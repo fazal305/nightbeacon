@@ -56,7 +56,7 @@ function channelSection({ channel, style }, item) {
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Swaps each term for its replacement (whole words, any case), longest term
-// first so "Israel Defense Forces" wins over a shorter overlapping rule.
+// first so "Ministry of Defence" wins over a shorter overlapping rule.
 // Applied to every draft, so the house terminology holds even when the
 // model slips back to the source's wording.
 export function applyTerminology(text, rules) {
@@ -69,12 +69,15 @@ export function applyTerminology(text, rules) {
   return out;
 }
 
-// The Israeli flag is never used on any channel. Removing it can leave a
-// dangling "⚡" from the "🇮🇷⚡🇮🇱" headline style, so that is tidied too.
-export function removeBannedFlags(text) {
-  if (!text) return text;
-  return text
-    .replace(/\u{1F1EE}\u{1F1F1}/gu, '')
+// Emoji never used on any channel (PUBLISH_BANNED_EMOJI). Removing a flag
+// can leave a dangling "⚡" from a "🇦🇦⚡🇧🇧" headline style, so that is
+// tidied too.
+export function removeBannedFlags(text, banned = []) {
+  if (!text || !banned.length) return text;
+  const hits = banned.filter((e) => text.includes(e));
+  if (!hits.length) return text;
+  return hits
+    .reduce((out, e) => out.split(e).join(''), text)
     .replace(/(\p{Regional_Indicator}{2})⚡(?=[ \t]|$)/gmu, '$1')
     .replace(/(^|[ \t])⚡(?=\p{Regional_Indicator}{2})/gmu, '$1')
     .replace(/^[ \t]*⚡[ \t]+/gmu, '')
@@ -114,15 +117,14 @@ const houseRulesBlock = (houseRules) =>
       houseRules.map((r) => `- ${r}`).join('\n')
     : null;
 
-export function buildDraftMessages({ item, targets, terminology = [], officialSources = new Map(), houseRules = [] }) {
+export function buildDraftMessages({ item, targets, terminology = [], officialSources = new Map(), houseRules = [], bannedEmoji = [] }) {
   const multi = targets.length > 1;
   const rules = [
     'You write posts for the operator\'s Telegram news channels.',
     'Write a post about the report below for each channel listed, in English, matching THAT channel\'s house style exactly: ' +
       'length, structure, emoji use, capitalisation, hashtags and any recurring sign-off, as shown in its rules and examples.',
     'Use only facts stated in the report. Never invent details, numbers, names, places or times. Keep every figure exactly as reported.',
-    'When the news is a statement by a party, attribute it with the neutral verb "said" — the same for every side ("CENTCOM said…", "The IRGC said…"). ' +
-      'Never use the Israeli flag emoji (🇮🇱); for Israeli actors use no flag.',
+    'When the news is a statement by a party, attribute it with the neutral verb "said" — the same for every side ("The ministry said…", "The army said…").',
     'Do not use loaded verbs such as "claimed", "alleged", "admitted" or "boasted" for any side.',
     'Never say where the report came from: no Telegram channel names or @handles, no "reported by N channels", no "according to sources / local channels / media reports", ' +
       'no links, no source or credit line. Name a person or organisation only when the news itself is their statement or claim.',
@@ -149,12 +151,13 @@ export function buildDraftMessages({ item, targets, terminology = [], officialSo
   if (organisations.length) {
     rules.push(
       `Official statements: for these organisations — ${organisations.join(', ')} — write a post presenting their statement ` +
-        '(e.g. "Hezbollah said…", a statement or communiqué) ONLY if the report comes from that organisation\'s own official channel (see "Source" below). ' +
+        '(e.g. "The ministry said…", a statement or communiqué) ONLY if the report comes from that organisation\'s own official channel (see "Source" below). ' +
         `If the report is not from their official channel and is mainly a statement or announcement by one of them, use exactly ${SKIP_TOKEN}. ` +
         'Other news reports are unaffected.'
     );
   }
   if (houseRules.length) rules.push(houseRulesBlock(houseRules));
+  if (bannedEmoji.length) rules.push(`Never use these emoji: ${bannedEmoji.join(' ')}.`);
   if (terminology.length) {
     rules.push(
       'Always use these names (house terminology), including inside quotes you paraphrase:\n' +
@@ -223,7 +226,7 @@ export function parseMultiDraft(content, keys) {
 
 // Scheduled summary of several stories for one channel. Same factual rules
 // as single posts; each story is summarised in a line or two.
-export function buildDigestMessages({ channel, style, stories, since, timeZone, terminology = [], officialSources = new Map(), houseRules = [] }) {
+export function buildDigestMessages({ channel, style, stories, since, timeZone, terminology = [], officialSources = new Map(), houseRules = [], bannedEmoji = [] }) {
   const organisations = [...new Set(officialSources.values())];
   const rules = [
     `You write the scheduled news summary for the Telegram channel "${channel.name}".`,
@@ -233,7 +236,6 @@ export function buildDigestMessages({ channel, style, stories, since, timeZone, 
     'Use only facts stated in the reports. Never invent details, numbers, names, places or times. Keep every figure exactly as reported.',
     'Attribute statements with the neutral verb "said" for every side; do not use "claimed", "alleged", "admitted" or "boasted".',
     'Never say where a report came from: no Telegram channel names or @handles, no "reported by N channels", no "according to sources", no links, no source or credit lines.',
-    'Never use the Israeli flag emoji (🇮🇱).',
     'Keep the whole post under 3500 characters.',
     `If there is nothing worth summarising, reply exactly ${SKIP_TOKEN}.`,
     'Reply with the post text only.',
@@ -245,6 +247,7 @@ export function buildDigestMessages({ channel, style, stories, since, timeZone, 
     );
   }
   if (houseRules.length) rules.push(houseRulesBlock(houseRules));
+  if (bannedEmoji.length) rules.push(`Never use these emoji: ${bannedEmoji.join(' ')}.`);
   if (terminology.length) {
     rules.push('Always use these names:\n' + terminology.map((r) => `- write "${r.replacement}" instead of "${r.term}"`).join('\n'));
   }

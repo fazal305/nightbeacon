@@ -1,0 +1,14 @@
+[
+  { "key": "main", "name": "Main channel", "telegram": "@your_main_channel", "delivery": "bot",
+    "draftPriorities": ["high", "medium"], "autoPriorities": ["high"], "styleGuideFile": "main.md",
+    "postsPerHour": 1, "maxPerHour": 3, "pace": "stats", "surge": { "maxPerHour": 6 },
+    "exclusiveGroup": "bots", "notify": "breaking", "quietHours": "01:00-07:00",
+    "digest": { "times": ["09:00", "21:00"], "maxStories": 10 },
+    "banners": { "dir": "banners/main", "textPosts": true, "digest": true, "watermark": true } },
+  { "key": "second", "name": "Second channel", "telegram": "@your_second_channel", "delivery": "bot",
+    "draftPriorities": ["high"], "autoPriorities": ["high"], "styleGuideFile": "second.md",
+    "postsPerHour": 1, "maxPerHour": 2, "pace": "stats", "surge": { "maxPerHour": 4 },
+    "exclusiveGroup": "bots", "notify": "breaking", "quietHours": "01:00-07:00" },
+  { "key": "partner", "name": "Partner channel", "telegram": "@partner_channel", "delivery": "manual",
+    "draftPriorities": ["high"], "styleGuideFile": "partner.md", "maxPerHour": 2 }
+]
